@@ -19,6 +19,75 @@ async function getStorage(env: Env) {
 }
 
 /**
+ * 解析优选配置的实际条目
+ *
+ * - 有 sourceUrls → 实时 fetch 远程文件，保证始终是最新数据
+ * - 无 sourceUrls → 直接用 KV 中存储的手动 items
+ *
+ * @param config - 优选配置对象
+ * @returns 去重后的条目数组
+ */
+async function resolveOptimalConfigItems(config: any): Promise<string[]> {
+    const sourceUrls: string[] = config.sourceUrls || [];
+
+    if (sourceUrls.length === 0) {
+        // 无远程来源，直接返回手动填写的 items
+        return (config.items || []).map((s: string) => s.trim()).filter(Boolean);
+    }
+
+    // 有 sourceUrls → 实时拉取，多个 URL 并行
+    const fetchPromises = sourceUrls.map(async (url: string) => {
+        try {
+            const response = (await Promise.race([
+                fetch(new Request(url, {
+                    headers: { 'User-Agent': GLOBAL_USER_AGENT },
+                    redirect: 'follow',
+                    cf: { insecureSkipVerify: true }
+                })),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
+            ])) as Response;
+
+            if (!response.ok) {
+                console.warn(`[优选] 拉取 ${url} 失败，状态码 ${response.status}`);
+                return [];
+            }
+
+            const text = await response.text();
+            return text
+                .split('\n')
+                .map((line) => line.split('#')[0].trim())
+                .filter(Boolean);
+        } catch (e) {
+            console.warn(`[优选] 拉取 ${url} 超时或出错:`, e);
+            return [];
+        }
+    });
+
+    const results = await Promise.all(fetchPromises);
+
+    // 合并、去重
+    const seen = new Set<string>();
+    const items: string[] = [];
+    for (const list of results) {
+        for (const item of list) {
+            if (!seen.has(item)) {
+                seen.add(item);
+                items.push(item);
+            }
+        }
+    }
+
+    if (items.length === 0) {
+        // 远程拉取全部失败，回退到 KV 中的 items（降级保底）
+        console.warn(`[优选] 配置 "${config.name}" 远程拉取失败，回退到 KV 存储的 items`);
+        return (config.items || []).map((s: string) => s.trim()).filter(Boolean);
+    }
+
+    console.log(`[优选] 配置 "${config.name}" 从远程获取 ${items.length} 条（来自 ${sourceUrls.length} 个 URL）`);
+    return items;
+}
+
+/**
  * 将关联了优选配置的节点展开为多节点
  *
  * 业务逻辑优先级：
@@ -523,8 +592,16 @@ export async function handleSubRequest(
 
             // 应用优选配置：将关联了优选配置的节点展开为多节点
             if (optimalConfigs.length > 0) {
+                // 并行解析每个配置的实际 items（有 sourceUrls 的实时拉取，否则用 KV 存储值）
+                const resolvedConfigs = await Promise.all(
+                    optimalConfigs.map(async (cfg) => ({
+                        ...cfg,
+                        items: await resolveOptimalConfigItems(cfg)
+                    }))
+                );
+
                 const beforeCount = combinedNodes.length;
-                combinedNodes = expandNodesWithOptimalConfigs(combinedNodes, optimalConfigs);
+                combinedNodes = expandNodesWithOptimalConfigs(combinedNodes, resolvedConfigs);
                 const afterCount = combinedNodes.length;
                 if (afterCount !== beforeCount) {
                     console.log(`[优选展开] 节点数 ${beforeCount} → ${afterCount}`);
