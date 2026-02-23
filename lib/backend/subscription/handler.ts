@@ -1,4 +1,4 @@
-import { KV_KEY_PROFILES, KV_KEY_SETTINGS, KV_KEY_SUBS } from '../config/constants';
+import { KV_KEY_OPTIMAL_CONFIGS, KV_KEY_PROFILES, KV_KEY_SETTINGS, KV_KEY_SUBS } from '../config/constants';
 import { GLOBAL_USER_AGENT, defaultSettings } from '../config/defaults';
 import { ProxyNode, convert, parse, process } from '../proxy';
 import { AppConfig, Profile, SubConfig, Subscription } from '../proxy/types';
@@ -18,19 +18,99 @@ async function getStorage(env: Env) {
     return StorageFactory.create(env, info.current);
 }
 
+/**
+ * 将关联了优选配置的节点展开为多节点
+ *
+ * 业务逻辑：
+ * - 节点关联了优选配置 → 用 items 中每条地址分别替换 server，生成 N 个节点
+ * - 节点未关联任何优选配置 → 保持原样不变
+ * - 优选配置 items 自动去重
+ *
+ * @param nodes - 已解析的节点列表（手动节点应携带 _optimalConfigIds 字段）
+ * @param optimalConfigs - 所有优选配置列表
+ * @returns 展开后的节点列表
+ */
+function expandNodesWithOptimalConfigs(nodes: ProxyNode[], optimalConfigs: any[]): ProxyNode[] {
+    if (!optimalConfigs || optimalConfigs.length === 0) return nodes;
+
+    // 只处理 enabled 且有 items 的配置
+    const activeConfigs = optimalConfigs.filter(
+        (c) => c.enabled !== false && Array.isArray(c.items) && c.items.length > 0
+    );
+    if (activeConfigs.length === 0) return nodes;
+
+    const result: ProxyNode[] = [];
+
+    for (const node of nodes) {
+        const configIds = (node as any)._optimalConfigIds as string[] | undefined;
+
+        if (!configIds || configIds.length === 0) {
+            // 未关联优选配置，原样保留
+            result.push(node);
+            continue;
+        }
+
+        // 收集所有关联配置的 items，并去重
+        const allItems: string[] = [];
+        for (const configId of configIds) {
+            const config = activeConfigs.find((c) => c.id === configId);
+            if (config?.items) {
+                for (const item of config.items) {
+                    const trimmed = item.trim();
+                    if (trimmed && !allItems.includes(trimmed)) {
+                        allItems.push(trimmed);
+                    }
+                }
+            }
+        }
+
+        if (allItems.length === 0) {
+            // 关联的配置没有有效 items，保留原节点
+            result.push(node);
+            continue;
+        }
+
+        // 展开：每个优选地址生成一个节点，替换 server
+        for (const item of allItems) {
+            const expandedNode = { ...node, server: item };
+            // 清理内部标记字段，不让其出现在最终输出中
+            delete (expandedNode as any)._optimalConfigIds;
+            result.push(expandedNode);
+        }
+
+        console.log(
+            `[优选展开] 节点 "${node.name}" 原 server "${node.server}" → 展开为 ${allItems.length} 个节点`
+        );
+    }
+
+    return result;
+}
+
 async function generateCombinedNodeList(
     config: SubConfig,
     userAgent: string,
     subs: Subscription[]
 ): Promise<ProxyNode[]> {
-    // 1. 处理手动节点
+    // 1. 处理手动节点（逐个解析以保留 optimalConfigIds 关联）
     const manualNodes = subs.filter((sub) => {
         const url = sub.url || '';
         return !url.toLowerCase().startsWith('http');
     });
-    // 直接解析手动节点文本
-    const manualContent = manualNodes.map((n) => n.url).join('\n');
-    let processedManualNodes = parse(manualContent);
+
+    let processedManualNodes: ProxyNode[] = [];
+    for (const sub of manualNodes) {
+        if (!sub.url) continue;
+        const parsed = parse(sub.url);
+        // 将 optimalConfigIds 附加到每个解析出的节点上
+        const optimalConfigIds = (sub as any).optimalConfigIds as string[] | undefined;
+        if (optimalConfigIds && optimalConfigIds.length > 0) {
+            for (const node of parsed) {
+                (node as any)._optimalConfigIds = optimalConfigIds;
+            }
+        }
+        processedManualNodes.push(...parsed);
+    }
+
     processedManualNodes = await process(
         processedManualNodes,
         {
@@ -173,14 +253,16 @@ export async function handleSubRequest(
 
     const storage = await getStorage(env);
 
-    const [settingsData, subsData, profilesData] = await Promise.all([
+    const [settingsData, subsData, profilesData, optimalConfigsData] = await Promise.all([
         storage.get<AppConfig>(KV_KEY_SETTINGS),
         storage.get<Subscription[]>(KV_KEY_SUBS),
-        storage.get<Profile[]>(KV_KEY_PROFILES)
+        storage.get<Profile[]>(KV_KEY_PROFILES),
+        storage.get<any[]>(KV_KEY_OPTIMAL_CONFIGS)
     ]);
 
     const allSubs = (subsData || []) as Subscription[];
     const allProfiles = (profilesData || []) as Profile[];
+    const optimalConfigs = (optimalConfigsData || []) as any[];
     const config = { ...defaultSettings, ...(settingsData || {}) } as AppConfig;
 
     let token: string | null = '';
@@ -411,11 +493,22 @@ export async function handleSubRequest(
         } else {
             // --- 内置转换模式 (或者是回调请求本身) ---
             console.log(isInternalFetch ? 'Serving internal nodes fetch' : 'Using built-in converter');
-            const combinedNodes = await generateCombinedNodeList(
+            let combinedNodes = await generateCombinedNodeList(
                 config,
                 upstreamUserAgent,
                 targetSubs
             );
+
+            // 应用优选配置：将关联了优选配置的节点展开为多节点
+            if (optimalConfigs.length > 0) {
+                const beforeCount = combinedNodes.length;
+                combinedNodes = expandNodesWithOptimalConfigs(combinedNodes, optimalConfigs);
+                const afterCount = combinedNodes.length;
+                if (afterCount !== beforeCount) {
+                    console.log(`[优选展开] 节点数 ${beforeCount} → ${afterCount}`);
+                }
+            }
+
             convertedContent = await convert(combinedNodes, targetFormat, {
                 filename: subName
             });
