@@ -21,12 +21,12 @@ async function getStorage(env: Env) {
 /**
  * 将关联了优选配置的节点展开为多节点
  *
- * 业务逻辑：
- * - 节点关联了优选配置 → 用 items 中每条地址分别替换 server，生成 N 个节点
- * - 节点未关联任何优选配置 → 保持原样不变
- * - 优选配置 items 自动去重
+ * 业务逻辑优先级：
+ * 1. 节点有 _optimalConfigIds → 用关联的非全局/全局配置展开
+ * 2. 节点是手动节点(_isManualNode) → 用所有 isGlobal=true 的配置展开
+ * 3. 其他节点 → 保持原样
  *
- * @param nodes - 已解析的节点列表（手动节点应携带 _optimalConfigIds 字段）
+ * @param nodes - 已解析的节点列表
  * @param optimalConfigs - 所有优选配置列表
  * @returns 展开后的节点列表
  */
@@ -39,47 +39,68 @@ function expandNodesWithOptimalConfigs(nodes: ProxyNode[], optimalConfigs: any[]
     );
     if (activeConfigs.length === 0) return nodes;
 
+    // 区分全局配置和非全局配置
+    const globalConfigs = activeConfigs.filter((c) => c.isGlobal === true);
+    const specificConfigs = activeConfigs.filter((c) => c.isGlobal !== true);
+
+    // 收集全局配置的所有 items（去重）
+    const globalItems: string[] = [];
+    for (const config of globalConfigs) {
+        for (const item of config.items) {
+            const trimmed = item.trim();
+            if (trimmed && !globalItems.includes(trimmed)) {
+                globalItems.push(trimmed);
+            }
+        }
+    }
+
     const result: ProxyNode[] = [];
 
     for (const node of nodes) {
         const configIds = (node as any)._optimalConfigIds as string[] | undefined;
+        const isManualNode = (node as any)._isManualNode === true;
 
-        if (!configIds || configIds.length === 0) {
-            // 未关联优选配置，原样保留
-            result.push(node);
-            continue;
-        }
-
-        // 收集所有关联配置的 items，并去重
-        const allItems: string[] = [];
-        for (const configId of configIds) {
-            const config = activeConfigs.find((c) => c.id === configId);
-            if (config?.items) {
-                for (const item of config.items) {
-                    const trimmed = item.trim();
-                    if (trimmed && !allItems.includes(trimmed)) {
-                        allItems.push(trimmed);
+        // 收集节点显式关联的 specific 配置 items
+        const specificItems: string[] = [];
+        if (configIds && configIds.length > 0) {
+            for (const configId of configIds) {
+                const config = activeConfigs.find((c) => c.id === configId);
+                if (config?.items) {
+                    for (const item of config.items) {
+                        const trimmed = item.trim();
+                        if (trimmed && !specificItems.includes(trimmed)) {
+                            specificItems.push(trimmed);
+                        }
                     }
                 }
             }
         }
 
-        if (allItems.length === 0) {
-            // 关联的配置没有有效 items，保留原节点
+        // 决定使用哪些 items 展开：
+        // - 有显式关联 → 使用关联的配置 items
+        // - 是手动节点且存在全局配置 → 使用全局配置 items
+        // - 否则 → 原样保留
+        let itemsToUse: string[];
+        if (specificItems.length > 0) {
+            itemsToUse = specificItems;
+        } else if (isManualNode && globalItems.length > 0) {
+            itemsToUse = globalItems;
+        } else {
             result.push(node);
             continue;
         }
 
         // 展开：每个优选地址生成一个节点，替换 server
-        for (const item of allItems) {
+        for (const item of itemsToUse) {
             const expandedNode = { ...node, server: item };
-            // 清理内部标记字段，不让其出现在最终输出中
+            // 清理内部标记字段
             delete (expandedNode as any)._optimalConfigIds;
+            delete (expandedNode as any)._isManualNode;
             result.push(expandedNode);
         }
 
         console.log(
-            `[优选展开] 节点 "${node.name}" 原 server "${node.server}" → 展开为 ${allItems.length} 个节点`
+            `[优选展开] "${node.name}" server="${node.server}" → ${itemsToUse.length} 个节点`
         );
     }
 
@@ -101,10 +122,11 @@ async function generateCombinedNodeList(
     for (const sub of manualNodes) {
         if (!sub.url) continue;
         const parsed = parse(sub.url);
-        // 将 optimalConfigIds 附加到每个解析出的节点上
+        // 将 optimalConfigIds 附加到每个解析出的节点上，同时标记为手动节点
         const optimalConfigIds = (sub as any).optimalConfigIds as string[] | undefined;
-        if (optimalConfigIds && optimalConfigIds.length > 0) {
-            for (const node of parsed) {
+        for (const node of parsed) {
+            (node as any)._isManualNode = true; // 标记来源，供 expandNodesWithOptimalConfigs 使用
+            if (optimalConfigIds && optimalConfigIds.length > 0) {
                 (node as any)._optimalConfigIds = optimalConfigIds;
             }
         }
