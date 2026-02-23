@@ -62,7 +62,18 @@ const isFormValid = computed(() => {
         errors.name = '配置名称不能为空';
     }
 
-    if (!formData.value.items || formData.value.items.length === 0) {
+    // 检查优选项：优先检查 itemsText，再检查 formData.value.items
+    const hasItems =
+        (itemsText.value &&
+            itemsText.value
+                .split('\n')
+                .some(
+                    (line) =>
+                        line.trim() && !line.trim().startsWith('#')
+                )) ||
+        (formData.value.items && formData.value.items.length > 0);
+
+    if (!hasItems) {
         errors.items = '至少需要添加一条优选项';
     }
 
@@ -81,6 +92,9 @@ const parseItems = () => {
         .filter((line) => line && !line.startsWith('#'));
 
     formData.value.items = items;
+
+    // 更新表单验证状态
+    formErrors.value = {};
 };
 
 /**
