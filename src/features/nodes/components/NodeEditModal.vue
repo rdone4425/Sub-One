@@ -13,9 +13,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 
+import { storeToRefs } from 'pinia';
+
 import Modal from '../../../components/ui/BaseModal.vue';
+import { useDataStore } from '../../../stores/data';
 import { useToastStore } from '../../../stores/toast';
-import type { Node } from '../../../types/index';
+import type { Node, OptimalConfig } from '../../../types/index';
 import { getProtocol } from '../../../utils/protocols';
 import { extractHostAndPort, extractNodeName } from '../../../utils/utils';
 
@@ -38,6 +41,8 @@ const emit = defineEmits<{
 // ==================== 状态 ====================
 
 const toastStore = useToastStore();
+const dataStore = useDataStore();
+const { optimalConfigs } = storeToRefs(dataStore);
 
 /** 本地编辑的节点副本 */
 const localNode = ref<Node | null>(null);
@@ -60,6 +65,27 @@ const saveButtonText = computed(() => (props.isNew ? '添加' : '保存'));
 const canSave = computed(() => {
     return localNode.value?.url && !urlError.value;
 });
+
+/** 节点选中的优选配置 ID 列表 */
+const selectedOptimalConfigIds = computed(() => {
+    return (localNode.value as any)?.optimalConfigIds || [];
+});
+
+/** 切换优选配置选择 */
+const toggleOptimalConfig = (configId: string) => {
+    if (!localNode.value) return;
+
+    const ids = (localNode.value as any).optimalConfigIds || [];
+    const index = ids.indexOf(configId);
+
+    if (index > -1) {
+        ids.splice(index, 1);
+    } else {
+        ids.push(configId);
+    }
+
+    (localNode.value as any).optimalConfigIds = ids;
+};
 
 // ==================== 监听器 ====================
 
@@ -249,7 +275,42 @@ const handleCancel = () => {
                     </p>
                 </div>
 
-                <!-- 提示信息 -->
+                <!-- 优选配置选择 -->
+                <div v-if="optimalConfigs.length > 0">
+                    <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        应用优选配置
+                        <span class="ml-1 text-xs text-gray-400">(可选)</span>
+                    </label>
+                    <div class="space-y-2">
+                        <div
+                            v-for="config in optimalConfigs"
+                            :key="config.id"
+                            class="flex items-center gap-3 rounded-lg border border-gray-200 p-3 transition-all dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
+                        >
+                            <input
+                                :id="`optimal-${config.id}`"
+                                :checked="selectedOptimalConfigIds.includes(config.id)"
+                                type="checkbox"
+                                class="h-4 w-4 cursor-pointer rounded border-gray-300 text-blue-600"
+                                @change="toggleOptimalConfig(config.id)"
+                            />
+                            <label
+                                :for="`optimal-${config.id}`"
+                                class="flex-1 cursor-pointer"
+                            >
+                                <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    {{ config.name }}
+                                </div>
+                                <div class="text-xs text-gray-500 dark:text-gray-400">
+                                    {{ config.type === 'domain' ? '🌐 域名' : config.type === 'ip' ? '📍 IP' : '🔗 混合' }} · {{ config.items?.length || 0 }} 项
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                    <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                        ℹ️ 选中的优选配置将在转换时应用于此节点
+                    </p>
+                </div>
                 <div
                     class="rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20"
                 >

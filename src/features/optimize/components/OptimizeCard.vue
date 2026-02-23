@@ -24,7 +24,6 @@ const props = defineProps<{
 const emit = defineEmits<{
     (e: 'edit'): void;
     (e: 'delete'): void;
-    (e: 'toggle'): void;
     (e: 'refresh'): void;
 }>();
 
@@ -44,7 +43,6 @@ const itemsCount = computed(() => {
 });
 
 const statusIcon = computed(() => {
-    if (props.config?.enabled === false) return '🔒';
     if (props.config?.type === 'domain') return '🌐';
     if (props.config?.type === 'ip') return '📍';
     return '🔗';
@@ -64,43 +62,17 @@ const typeLabel = computed(() => {
     <div
         class="group relative flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-4 transition-all duration-300 hover:shadow-lg dark:border-gray-700 dark:bg-gray-800"
     >
-        <!-- 启用状态指示 -->
-        <div
-            v-if="!(config?.enabled !== false)"
-            class="absolute inset-0 rounded-2xl bg-gray-400/20 backdrop-blur-[1px]"
-        />
-
-        <!-- 头部：名称和状态 -->
-        <div class="flex items-start justify-between gap-2">
-            <div class="flex-1 pr-2">
-                <h3 class="text-sm font-bold text-gray-900 dark:text-white">
-                    {{ statusIcon }} {{ config?.name || '未命名' }}
-                </h3>
-                <p
-                    v-if="config?.description"
-                    class="mt-1 text-xs text-gray-500 dark:text-gray-400"
-                >
-                    {{ config.description }}
-                </p>
-            </div>
-
-            <!-- 启用切换开关 -->
-            <button
-                :class="[
-                    'relative h-6 w-10 rounded-full transition-all duration-300',
-                    (config?.enabled !== false)
-                        ? 'bg-blue-500 shadow-md'
-                        : 'bg-gray-300 dark:bg-gray-600'
-                ]"
-                @click="$emit('toggle')"
+        <!-- 头部：名称和描述 -->
+        <div class="space-y-2">
+            <h3 class="text-sm font-bold text-gray-900 dark:text-white">
+                {{ statusIcon }} {{ config?.name || '未命名' }}
+            </h3>
+            <p
+                v-if="config?.description"
+                class="text-xs text-gray-500 dark:text-gray-400"
             >
-                <span
-                    :class="[
-                        'absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all duration-300',
-                        (config?.enabled !== false) ? 'right-0.5' : 'left-0.5'
-                    ]"
-                />
-            </button>
+                {{ config.description }}
+            </p>
         </div>
 
         <!-- 配置信息 -->

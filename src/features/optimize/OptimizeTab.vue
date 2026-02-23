@@ -131,25 +131,6 @@ const handleDeleteConfirm = async () => {
     }
 };
 
-const handleToggleEnable = async (config: OptimalConfig) => {
-    try {
-        // 确保 enabled 字段有正确的值
-        const currentEnabled = config.enabled !== undefined ? config.enabled : true;
-        const updated = {
-            ...config,
-            enabled: !currentEnabled,
-            updatedAt: Date.now()
-        };
-        await dataStore.updateOptimalConfig(updated);
-        showToast(
-            !currentEnabled ? '✅ 配置已启用' : '✅ 配置已禁用',
-            'success'
-        );
-    } catch (error) {
-        showToast(`❌ 操作失败: ${error instanceof Error ? error.message : '未知错误'}`, 'error');
-    }
-};
-
 const handleRefreshOptimal = async (config: OptimalConfig) => {
     if (!config.sourceUrls || config.sourceUrls.length === 0) {
         showToast('❌ 此配置没有设置源 URL', 'error');
@@ -216,7 +197,6 @@ onMounted(() => {
                         :config="config"
                         @edit="openEditOptimalModal"
                         @delete="confirmDelete"
-                        @toggle="handleToggleEnable"
                         @refresh="handleRefreshOptimal"
                     />
                 </template>

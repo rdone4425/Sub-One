@@ -427,8 +427,8 @@ export const useDataStore = defineStore('data', () => {
         const normalizedConfig: OptimalConfig = {
             ...config,
             id: config.id || `opt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            enabled: config.enabled !== undefined ? config.enabled : true,
-            isGlobal: config.isGlobal !== undefined ? config.isGlobal : true,
+            enabled: true,  // 总是启用
+            isGlobal: true,  // 总是全局
             type: config.type || 'domain',
             items: config.items || [],
             createdAt: config.createdAt || Date.now(),
@@ -442,8 +442,8 @@ export const useDataStore = defineStore('data', () => {
         // 确保所有必需字段都存在
         const normalizedConfig: OptimalConfig = {
             ...config,
-            enabled: config.enabled !== undefined ? config.enabled : true,
-            isGlobal: config.isGlobal !== undefined ? config.isGlobal : true,
+            enabled: true,  // 总是启用
+            isGlobal: true,  // 总是全局
             type: config.type || 'domain',
             items: config.items || [],
             updatedAt: Date.now()
@@ -514,8 +514,8 @@ export const useDataStore = defineStore('data', () => {
                 config.items = allItems;
                 config.updatedAt = Date.now();
                 // 确保配置对象有所有必需的字段
-                if (config.enabled === undefined) config.enabled = true;
-                if (config.isGlobal === undefined) config.isGlobal = true;
+                config.enabled = true;
+                config.isGlobal = true;
                 if (config.type === undefined) config.type = 'domain';
                 return await saveData(`刷新优选配置: ${config.name}`);
             } else {

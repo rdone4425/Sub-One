@@ -42,8 +42,6 @@ const formData = ref<Partial<OptimalConfig>>({
     description: '',
     items: [],
     type: 'domain',
-    enabled: true,
-    isGlobal: true,
     subscriptionIds: []
 });
 
@@ -197,8 +195,6 @@ const initializeForm = () => {
             description: '',
             items: [],
             type: 'domain',
-            enabled: true,
-            isGlobal: true,
             subscriptionIds: [],
             createdAt: Date.now(),
             updatedAt: Date.now()
@@ -236,11 +232,9 @@ const handleConfirm = () => {
                     ? formData.value.sourceUrls
                     : undefined),
         type: (formData.value.type as 'domain' | 'ip' | 'mixed') || 'domain',
-        enabled: formData.value.enabled !== undefined ? formData.value.enabled : true,
-        isGlobal: formData.value.isGlobal !== undefined ? formData.value.isGlobal : true,
-        subscriptionIds: formData.value.subscriptionIds && formData.value.subscriptionIds.length > 0
-            ? formData.value.subscriptionIds
-            : undefined,
+        enabled: true,  // 总是启用，不再需要用户配置
+        isGlobal: true,  // 总是全局配置
+        subscriptionIds: undefined,
         createdAt: (formData.value.createdAt as number) || Date.now(),
         updatedAt: Date.now()
     };
@@ -447,27 +441,11 @@ watch(
                     </p>
                 </div>
 
-                <!-- 启用状态 -->
-                <div class="flex items-center gap-2">
-                    <input
-                        :id="`enabled-${Date.now()}`"
-                        v-model="formData.enabled"
-                        type="checkbox"
-                        class="h-4 w-4 cursor-pointer rounded border-gray-300"
-                    />
-                    <label
-                        :for="`enabled-${Date.now()}`"
-                        class="cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-300"
-                    >
-                        ✅ 启用此配置
-                    </label>
-                </div>
-
                 <!-- 提示信息 -->
                 <div
                     class="rounded-lg bg-blue-50 p-3 text-xs text-blue-700 dark:bg-blue-900 dark:text-blue-200"
                 >
-                    💡 优选配置可用于在节点转换时替换服务器地址，提升访问速度和稳定性。
+                    💡 优选配置可在手动节点编辑时按需应用。在创建或编辑节点时选择要使用的优选配置。
                 </div>
             </div>
         </template>
