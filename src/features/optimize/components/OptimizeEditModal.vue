@@ -3,9 +3,10 @@
 
   功能说明：
   - 编辑优选配置信息
-  - 编辑优选项列表（支持多行输入）
-  - 选择配置类型（域名/IP/混合）
-  - 设置全局或特定订阅配置
+  - 支持两种方式提供优选数据：
+    1. 手动输入：直接填写域名/IP，每行一条
+    2. 来源 URL：填写远程文件地址，后端订阅时实时拉取（推荐）
+  - 两种方式可同时使用
   - 表单验证和提交
 
   ======================================================
@@ -31,7 +32,7 @@ const emit = defineEmits<{
     (e: 'confirm', config: OptimalConfig): void;
 }>();
 
-// ==================== Store & Utils ====================
+// ==================== Store ====================
 
 const { showToast } = useToastStore();
 
@@ -46,10 +47,8 @@ const formData = ref<Partial<OptimalConfig>>({
 });
 
 const itemsText = ref('');
+const sourceUrlsText = ref('');
 const formErrors = ref<Record<string, string>>({});
-const urlInput = ref('');
-const isFetchingUrl = ref(false);
-const inputMode = ref<'manual' | 'url'>('manual');
 
 // ==================== Computed ====================
 
@@ -60,19 +59,14 @@ const isFormValid = computed(() => {
         errors.name = '配置名称不能为空';
     }
 
-    // 检查优选项：优先检查 itemsText，再检查 formData.value.items
-    const hasItems =
-        (itemsText.value &&
-            itemsText.value
-                .split('\n')
-                .some(
-                    (line) =>
-                        line.trim() && !line.trim().startsWith('#')
-                )) ||
-        (formData.value.items && formData.value.items.length > 0);
+    const hasItems = itemsText.value
+        .split('\n')
+        .some((line) => line.trim() && !line.trim().startsWith('#'));
 
-    if (!hasItems) {
-        errors.items = '至少需要添加一条优选项';
+    const hasSourceUrls = sourceUrlsText.value.trim().length > 0;
+
+    if (!hasItems && !hasSourceUrls) {
+        errors.items = '请填写优选项列表，或填写来源 URL（后端订阅时自动拉取）';
     }
 
     formErrors.value = errors;
@@ -84,110 +78,17 @@ const confirmDisabled = computed(() => !isFormValid.value);
 // ==================== Methods ====================
 
 const parseItems = () => {
-    const items = itemsText.value
+    formData.value.items = itemsText.value
         .split('\n')
         .map((line) => line.trim())
         .filter((line) => line && !line.startsWith('#'));
-
-    formData.value.items = items;
-
-    // 更新表单验证状态
-    formErrors.value = {};
-};
-
-/**
- * 从 URL 获取优选项列表
- */
-const fetchFromUrl = async () => {
-    if (!urlInput.value.trim()) {
-        showToast('❌ 请输入 URL 地址', 'error');
-        return;
-    }
-
-    isFetchingUrl.value = true;
-    try {
-        const urls = urlInput.value
-            .split(',')
-            .map((u) => u.trim())
-            .filter((u) => u);
-
-        const allItems: string[] = [];
-        const itemSet = new Set<string>(); // 用于去重
-
-        for (let i = 0; i < urls.length; i++) {
-            const url = urls[i];
-            try {
-                console.log(`📥 [${i + 1}/${urls.length}] 正在获取: ${url}`);
-                const response = await fetch(url);
-
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-
-                const content = await response.text();
-                const lines = content.split('\n');
-
-                let addedCount = 0;
-                lines.forEach((line) => {
-                    const trimmed = line.trim();
-                    // 过滤空行和注释
-                    if (trimmed && !trimmed.startsWith('#')) {
-                        // 移除注释部分
-                        const item = trimmed.split('#')[0].trim();
-                        if (item && !itemSet.has(item)) {
-                            allItems.push(item);
-                            itemSet.add(item);
-                            addedCount++;
-                        }
-                    }
-                });
-
-                console.log(`✅ [${i + 1}/${urls.length}] 成功获取 ${addedCount} 个项目`);
-            } catch (error) {
-                const errorMsg = error instanceof Error ? error.message : '未知错误';
-                console.error(`❌ [${i + 1}/${urls.length}] 获取失败: ${errorMsg}`);
-                showToast(`❌ URL ${i + 1} 获取失败: ${errorMsg}`, 'error');
-            }
-        }
-
-        if (allItems.length > 0) {
-            // 追加到现有内容
-            const existingLines = itemsText.value
-                .split('\n')
-                .map((line) => line.trim())
-                .filter((line) => line && !line.startsWith('#'));
-
-            const combinedItems = Array.from(
-                new Set([...existingLines, ...allItems])
-            );
-
-            itemsText.value = combinedItems.join('\n');
-            showToast(
-                `✅ 成功获取 ${allItems.length} 个项目 (已去重)`,
-                'success'
-            );
-            urlInput.value = '';
-            inputMode.value = 'manual';
-        } else {
-            showToast('❌ 未获取到有效项目，请检查 URL', 'error');
-        }
-    } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : '未知错误';
-        showToast(`❌ 获取失败: ${errorMsg}`, 'error');
-    } finally {
-        isFetchingUrl.value = false;
-    }
-};
-
-const resetUrlInput = () => {
-    urlInput.value = '';
-    inputMode.value = 'manual';
 };
 
 const initializeForm = () => {
     if (props.config) {
         formData.value = JSON.parse(JSON.stringify(props.config));
         itemsText.value = (props.config.items || []).join('\n');
+        sourceUrlsText.value = (props.config.sourceUrls || []).join('\n');
     } else {
         formData.value = {
             id: `opt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -200,10 +101,9 @@ const initializeForm = () => {
             updatedAt: Date.now()
         };
         itemsText.value = '';
+        sourceUrlsText.value = '';
     }
     formErrors.value = {};
-    urlInput.value = '';
-    inputMode.value = 'manual';
 };
 
 const handleConfirm = () => {
@@ -211,29 +111,26 @@ const handleConfirm = () => {
 
     if (!isFormValid.value) {
         const firstError = Object.values(formErrors.value)[0];
-        if (firstError) {
-            showToast(`❌ ${firstError}`, 'error');
-        }
+        if (firstError) showToast(`❌ ${firstError}`, 'error');
         return;
     }
+
+    const sourceUrls = sourceUrlsText.value
+        .split('\n')
+        .map((u) => u.trim())
+        .filter((u) => u.startsWith('http'));
 
     const config: OptimalConfig = {
         id: formData.value.id || `opt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         name: (formData.value.name || '').trim(),
-        description: formData.value.description ? (formData.value.description as string).trim() : undefined,
+        description: formData.value.description
+            ? (formData.value.description as string).trim()
+            : undefined,
         items: formData.value.items || [],
-        sourceUrls:
-            inputMode.value === 'url' && urlInput.value.trim()
-                ? urlInput.value
-                      .split(',')
-                      .map((u) => u.trim())
-                      .filter((u) => u)
-                : (formData.value.sourceUrls && formData.value.sourceUrls.length > 0
-                    ? formData.value.sourceUrls
-                    : undefined),
+        sourceUrls: sourceUrls.length > 0 ? sourceUrls : undefined,
         type: (formData.value.type as 'domain' | 'ip' | 'mixed') || 'domain',
-        enabled: true,  // 总是启用，不再需要用户配置
-        isGlobal: true,  // 总是全局配置
+        enabled: true,
+        isGlobal: true,
         subscriptionIds: undefined,
         createdAt: (formData.value.createdAt as number) || Date.now(),
         updatedAt: Date.now()
@@ -244,7 +141,6 @@ const handleConfirm = () => {
 
 const closeModal = () => {
     emit('update:show', false);
-    resetUrlInput();
 };
 
 // ==================== Watchers ====================
@@ -252,9 +148,7 @@ const closeModal = () => {
 watch(
     () => props.show,
     (newVal) => {
-        if (newVal) {
-            initializeForm();
-        }
+        if (newVal) initializeForm();
     }
 );
 </script>
@@ -306,146 +200,64 @@ watch(
                 </div>
 
                 <!-- 配置类型 -->
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">
-                            配置类型 <span class="text-red-500">*</span>
-                        </label>
-                        <select
-                            v-model="formData.type"
-                            class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                        >
-                            <option value="domain">🌐 域名</option>
-                            <option value="ip">📍 IP地址</option>
-                            <option value="mixed">🔗 混合</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">
-                            配置范围
-                        </label>
-                        <select
-                            v-model="formData.isGlobal"
-                            class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                        >
-                            <option :value="true">🌍 全局配置</option>
-                            <option :value="false">📌 特定订阅</option>
-                        </select>
-                    </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                        配置类型
+                    </label>
+                    <select
+                        v-model="formData.type"
+                        class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                    >
+                        <option value="domain">🌐 域名</option>
+                        <option value="ip">📍 IP地址</option>
+                        <option value="mixed">🔗 混合</option>
+                    </select>
                 </div>
 
-                <!-- 优选项列表 -->
+                <!-- 来源 URL -->
                 <div>
-                    <div class="flex items-center justify-between">
-                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">
-                            优选项列表 <span class="text-red-500">*</span>
-                        </label>
-                        <div class="flex gap-2">
-                            <button
-                                :class="[
-                                    'text-xs font-semibold px-2 py-1 rounded-lg transition-all',
-                                    inputMode.value === 'manual'
-                                        ? 'bg-blue-500 text-white'
-                                        : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                                ]"
-                                @click="inputMode = 'manual'"
-                            >
-                                📝 手动输入
-                            </button>
-                            <button
-                                :class="[
-                                    'text-xs font-semibold px-2 py-1 rounded-lg transition-all',
-                                    inputMode.value === 'url'
-                                        ? 'bg-blue-500 text-white'
-                                        : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                                ]"
-                                @click="inputMode = 'url'"
-                            >
-                                🔗 远程获取
-                            </button>
-                        </div>
-                    </div>
+                    <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                        来源 URL
+                        <span class="ml-1 text-xs font-normal text-gray-400">（推荐）</span>
+                    </label>
+                    <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                        每行一个 URL。订阅被访问时后端实时拉取，远程更新无需任何操作。
+                    </p>
+                    <textarea
+                        v-model="sourceUrlsText"
+                        placeholder="https://raw.githubusercontent.com/example/repo/main/ips.txt"
+                        rows="3"
+                        class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                    />
+                </div>
 
-                    <!-- 手动输入模式 -->
-                    <div v-if="inputMode === 'manual'" class="mt-2 space-y-2">
-                        <p class="text-xs text-gray-500 dark:text-gray-400">
-                            每行一条（支持注释，以 # 开头）
-                        </p>
-                        <textarea
-                            v-model="itemsText"
-                            :placeholder="`${formData.type === 'ip' ? '192.168.1.1\n10.0.0.1' : formData.type === 'domain' ? 'cdn.example.com\nproxy.example.com' : 'cdn.example.com\n192.168.1.1'}\n# 这是注释`"
-                            rows="8"
-                            class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                        />
-                    </div>
-
-                    <!-- 远程获取模式 -->
-                    <div v-if="inputMode === 'url'" class="mt-2 space-y-2">
-                        <p class="text-xs text-gray-500 dark:text-gray-400">
-                            支持多个 URL，用逗号分隔。将自动提取有效项并去重。
-                        </p>
-                        <div class="flex gap-2">
-                            <input
-                                v-model="urlInput"
-                                type="text"
-                                placeholder="https://raw.githubusercontent.com/rdone4425/node/refs/heads/main/cf_ips.txt"
-                                class="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                                :disabled="isFetchingUrl"
-                            />
-                            <button
-                                :disabled="isFetchingUrl || !urlInput.trim()"
-                                :class="[
-                                    'rounded-lg px-4 py-2 text-sm font-semibold transition-all',
-                                    isFetchingUrl || !urlInput.trim()
-                                        ? 'cursor-not-allowed bg-gray-300 text-gray-500 dark:bg-gray-700'
-                                        : 'bg-blue-500 text-white hover:bg-blue-600'
-                                ]"
-                                @click="fetchFromUrl"
-                            >
-                                {{ isFetchingUrl ? '⏳ 获取中...' : '📥 获取' }}
-                            </button>
-                        </div>
-
-                        <!-- 获取后的显示 -->
-                        <div
-                            v-if="itemsText"
-                            class="mt-2 rounded-lg bg-green-50 p-3 dark:bg-green-900/20"
-                        >
-                            <p class="text-xs font-semibold text-green-700 dark:text-green-200">
-                                ✅ 已获取内容，下方显示预览
-                            </p>
-                        </div>
-
-                        <!-- 预览和编辑 -->
-                        <textarea
-                            v-model="itemsText"
-                            placeholder="获取成功后在此显示"
-                            rows="6"
-                            class="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                        />
-                    </div>
-
-                    <!-- 错误提示 -->
+                <!-- 手动优选项 -->
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                        手动优选项
+                        <span class="ml-1 text-xs font-normal text-gray-400">（可选）</span>
+                    </label>
+                    <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                        每行一条，支持 # 开头的注释行。与来源 URL 合并使用。
+                    </p>
+                    <textarea
+                        v-model="itemsText"
+                        :placeholder="formData.type === 'ip'
+                            ? '192.168.1.1\n10.0.0.1\n# 这是注释'
+                            : 'cdn.example.com\nproxy.example.com\n# 这是注释'"
+                        rows="6"
+                        class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                    />
                     <p v-if="formErrors.items" class="mt-1 text-xs text-red-500">
                         {{ formErrors.items }}
                     </p>
-
-                    <!-- 项目统计 -->
-                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                        当前已添加:
-                        <span class="font-semibold text-gray-700 dark:text-gray-300">
-                            {{ formData.items?.length || 0 }}
-                        </span>
-                        项
-                    </p>
                 </div>
 
-                <!-- 提示信息 -->
+                <!-- 提示 -->
                 <div
-                    class="rounded-lg bg-blue-50 p-3 text-xs text-blue-700 dark:bg-blue-900 dark:text-blue-200"
+                    class="rounded-lg bg-blue-50 p-3 text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
                 >
-                    💡 优选配置可在手动节点编辑时按需应用。在创建或编辑节点时选择要使用的优选配置。
+                    💡 填写来源 URL 后，每次订阅请求时后端会实时拉取最新数据，确保优选列表始终更新。
                 </div>
             </div>
         </template>

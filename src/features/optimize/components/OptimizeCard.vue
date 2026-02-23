@@ -24,7 +24,6 @@ const props = defineProps<{
 const emit = defineEmits<{
     (e: 'edit'): void;
     (e: 'delete'): void;
-    (e: 'refresh'): void;
     (e: 'view-nodes'): void;
 }>();
 
@@ -135,14 +134,6 @@ const typeLabel = computed(() => {
                     @click="$emit('edit')"
                 >
                     ✏️ 编辑
-                </button>
-                <button
-                    v-if="config?.sourceUrls && config.sourceUrls.length > 0"
-                    class="flex-1 rounded-lg bg-green-100 px-3 py-1.5 text-xs font-semibold text-green-700 transition-all duration-300 hover:bg-green-200 dark:bg-green-900 dark:text-green-200 dark:hover:bg-green-800"
-                    @click="$emit('refresh')"
-                    title="从源 URL 刷新优选项"
-                >
-                    🔄 刷新
                 </button>
                 <button
                     class="flex-1 rounded-lg bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-700 transition-all duration-300 hover:bg-red-200 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800"
