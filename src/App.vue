@@ -60,7 +60,7 @@ const HelpModal = defineAsyncComponent(() => import('./features/settings/HelpMod
  */
 const sessionStore = useSessionStore();
 const dataStore = useDataStore();
-const { isInitialized, subscriptions, manualNodes, profiles } = storeToRefs(dataStore);
+const { isInitialized, subscriptions, manualNodes, profiles, optimalConfigs } = storeToRefs(dataStore);
 
 /**
  * 从 Store 中提取响应式状态

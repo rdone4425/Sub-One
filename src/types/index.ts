@@ -180,6 +180,7 @@ export interface ConverterOptions {
 export interface InitialData {
     subs?: Subscription[];
     profiles?: Profile[];
+    optimalConfigs?: OptimalConfig[];
     config?: AppConfig;
 }
 

@@ -1,4 +1,4 @@
-import { KV_KEY_PROFILES, KV_KEY_SETTINGS, KV_KEY_SUBS, OLD_KV_KEY } from '../config/constants';
+import { KV_KEY_PROFILES, KV_KEY_SETTINGS, KV_KEY_SUBS, KV_KEY_OPTIMAL_CONFIGS, OLD_KV_KEY } from '../config/constants';
 import { GLOBAL_USER_AGENT, defaultSettings } from '../config/defaults';
 import { ProxyNode, convert, parse, process } from '../proxy';
 import { AppConfig, Profile, Subscription, SubscriptionUserInfo } from '../proxy/types';
@@ -236,14 +236,15 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         case '/data': {
             try {
                 const storage = await getStorage(env);
-                const [subs, profiles, settingsData] = await Promise.all([
+                const [subs, profiles, settingsData, optimalConfigs] = await Promise.all([
                     storage.get<Subscription[]>(KV_KEY_SUBS).then((res) => res || []),
                     storage.get<Profile[]>(KV_KEY_PROFILES).then((res) => res || []),
-                    storage.get<Partial<AppConfig>>(KV_KEY_SETTINGS)
+                    storage.get<Partial<AppConfig>>(KV_KEY_SETTINGS),
+                    storage.get<any[]>(KV_KEY_OPTIMAL_CONFIGS).then((res) => res || [])
                 ]);
                 const settings = { ...defaultSettings, ...(settingsData || {}) } as AppConfig;
                 const config = settings;
-                return new Response(JSON.stringify({ subs, profiles, config }), {
+                return new Response(JSON.stringify({ subs, profiles, config, optimalConfigs }), {
                     headers: { 'Content-Type': 'application/json' }
                 });
             } catch (e) {
@@ -269,7 +270,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
                     );
                 }
 
-                const { subs, profiles } = requestData;
+                const { subs, profiles, optimalConfigs } = requestData;
 
                 // 步骤2: 验证必需字段
                 if (typeof subs === 'undefined' || typeof profiles === 'undefined') {
@@ -328,10 +329,26 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
 
                 // 步骤6: 保存数据到存储（使用条件写入）
                 try {
-                    await Promise.all([
+                    const storagePromises = [
                         storage.put(KV_KEY_SUBS, subs),
                         storage.put(KV_KEY_PROFILES, profiles)
-                    ]);
+                    ];
+
+                    // 如果提供了 optimalConfigs，也保存
+                    if (optimalConfigs !== undefined) {
+                        if (!Array.isArray(optimalConfigs)) {
+                            return new Response(
+                                JSON.stringify({
+                                    success: false,
+                                    message: 'optimalConfigs 必须是数组格式'
+                                }),
+                                { status: 400 }
+                            );
+                        }
+                        storagePromises.push(storage.put(KV_KEY_OPTIMAL_CONFIGS, optimalConfigs));
+                    }
+
+                    await Promise.all(storagePromises);
                 } catch (kvError: any) {
                     console.error('[API Error /subs] 存储写入失败:', kvError);
                     return new Response(

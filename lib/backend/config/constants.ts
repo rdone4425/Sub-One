@@ -5,3 +5,4 @@ export const KV_KEY_SETTINGS = 'worker_settings_v1';
 export const KV_KEY_USERS = 'sub_one_users_v1';
 export const KV_KEY_SECRET = 'sub_one_app_secret_v1';
 export const KV_KEY_BACKUPS = 'sub_one_backups_v1';
+export const KV_KEY_OPTIMAL_CONFIGS = 'sub_one_optimal_configs_v1';

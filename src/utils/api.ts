@@ -8,7 +8,7 @@
  *
  * ======================================================
  */
-import type { ApiResponse, AppConfig, Profile, Subscription, SubscriptionUserInfo } from '../types';
+import type { ApiResponse, AppConfig, OptimalConfig, Profile, Subscription, SubscriptionUserInfo } from '../types';
 
 // 导出 ApiResponse 类型供其他模块使用
 export type { ApiResponse };
@@ -19,14 +19,15 @@ export type { ApiResponse };
  * 获取初始数据
  *
  * 说明：
- * - 从服务器获取用户的所有订阅、订阅组和配置信息
+ * - 从服务器获取用户的所有订阅、订阅组、优选配置和配置信息
  * - 用于应用启动时的数据初始化
  *
- * @returns {Promise} 返回包含 subs、profiles、config 的对象，失败返回 null
+ * @returns {Promise} 返回包含 subs、profiles、optimalConfigs、config 的对象，失败返回 null
  */
 export async function fetchInitialData(): Promise<{
     subs: Subscription[];
     profiles: Profile[];
+    optimalConfigs: OptimalConfig[];
     config: AppConfig;
 } | null> {
     try {
@@ -39,7 +40,7 @@ export async function fetchInitialData(): Promise<{
             return null;
         }
 
-        // 解析并返回 JSON 数据（后端返回格式：{ subs, profiles, config }）
+        // 解析并返回 JSON 数据（后端返回格式：{ subs, profiles, optimalConfigs, config }）
         return await response.json();
     } catch (error) {
         console.error('获取初始数据失败:', error);
@@ -150,17 +151,22 @@ export async function logout(): Promise<boolean> {
 // ==================== 数据保存 ====================
 
 /**
- * 保存订阅和订阅组数据
+ * 保存订阅、订阅组和优选配置数据
  *
  * 说明：
- * - 核心保存函数，同时保存订阅列表和订阅组列表
+ * - 核心保存函数，同时保存订阅列表、订阅组列表和优选配置
  * - 包含数据验证和详细的错误处理
  *
  * @param {Subscription[]} subs - 订阅列表
  * @param {Profile[]} profiles - 订阅组列表
+ * @param {OptimalConfig[]} optimalConfigs - 优选配置列表
  * @returns {Promise<ApiResponse>} 返回 API 响应对象
  */
-export async function saveSubs(subs: Subscription[], profiles: Profile[]): Promise<ApiResponse> {
+export async function saveSubs(
+    subs: Subscription[],
+    profiles: Profile[],
+    optimalConfigs?: OptimalConfig[]
+): Promise<ApiResponse> {
     try {
         // 数据预验证：确保传入的参数是数组类型
         if (!Array.isArray(subs) || !Array.isArray(profiles)) {
@@ -171,8 +177,12 @@ export async function saveSubs(subs: Subscription[], profiles: Profile[]): Promi
         const response = await fetch('/api/subs', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            // 将 subs 和 profiles 一起发送到后端
-            body: JSON.stringify({ subs, profiles })
+            // 将 subs、profiles 和 optimalConfigs 一起发送到后端
+            body: JSON.stringify({
+                subs,
+                profiles,
+                optimalConfigs: optimalConfigs || []
+            })
         });
 
         // 检查 HTTP 状态码
@@ -203,29 +213,30 @@ export async function saveSubs(subs: Subscription[], profiles: Profile[]): Promi
 }
 
 /**
- * 保存所有数据（订阅、订阅组、配置）
+ * 保存所有数据（订阅、订阅组、配置、优选配置）
  *
  * 说明：
- * - 统一保存接口，虽然当前 saveSubs 只支持 subs/profiles，但可以扩展。
- * - 目前实现为分别调用 saveSubs, saveSettings 或调整后端接口支持统一保存。
- * - 根据 `useDataStore.saveData` 逻辑，它期望一个统一的 payload。
- * - 这里我们实现一个包装器，将 payload 拆分为 saveSubs 和 saveSettings 调用，或者假设后端 /api/subs 已经升级支持。
- * - 鉴于后端未知，我们假设需要分别保存，或者创建一个新函数适配旧接口。
- * - 但为了最简改动，我们假设后端 `/api/data` POST 存在？这里没有。
- * - 让我们复用 `saveSubs` 来保存 subs 和 profiles。Config 单独保存？
- * - DataStore 这里是 `await api.saveAllData(payload)`。
- *
- * 真正的实现：为了保证事务性，后端最好有一个 `POST /api/data`。但既然要兼容，我们先并行或串行调用。
+ * - 统一保存接口，同时保存 subs, profiles, config 和 optimalConfigs
+ * - 通过 /subs 端点保存 subs/profiles/optimalConfigs，通过 /settings 端点保存 config
+ * - 并行调用两个接口，提高效率
  */
 export async function saveAllData(data: {
     subs: Subscription[];
     profiles: Profile[];
     config: AppConfig;
+    optimalConfigs?: OptimalConfig[];
 }): Promise<ApiResponse> {
     try {
-        // 并行保存配置和订阅
+        // 构建请求体（包含 optimalConfigs）
+        const subsPayload = {
+            subs: data.subs,
+            profiles: data.profiles,
+            optimalConfigs: data.optimalConfigs || []
+        };
+
+        // 并行保存 subs/profiles/optimalConfigs 和 settings
         const [subsResult, settingsResult] = await Promise.all([
-            saveSubs(data.subs, data.profiles),
+            saveSubs(subsPayload.subs, subsPayload.profiles, subsPayload.optimalConfigs),
             saveSettings(data.config)
         ]);
 
