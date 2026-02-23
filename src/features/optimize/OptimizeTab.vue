@@ -17,12 +17,11 @@ import { computed, defineAsyncComponent, onMounted, ref } from 'vue';
 import { storeToRefs } from 'pinia';
 
 import ConfirmModal from '../../components/ui/ConfirmModal.vue';
-import BaseModal from '../../components/ui/BaseModal.vue';
 import EmptyState from '../../components/ui/EmptyState.vue';
 import Pagination from '../../components/ui/Pagination.vue';
 import { useDataStore } from '../../stores/data';
 import { useToastStore } from '../../stores/toast';
-import type { OptimalConfig, Node } from '../../types/index';
+import type { OptimalConfig } from '../../types/index';
 
 // 异步加载编辑模态框
 const OptimizeEditModal = defineAsyncComponent(
