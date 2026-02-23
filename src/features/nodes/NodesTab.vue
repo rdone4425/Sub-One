@@ -6,12 +6,13 @@ import { storeToRefs } from 'pinia';
 import draggable from 'vuedraggable';
 
 import ConfirmModal from '../../components/ui/ConfirmModal.vue';
+import BaseModal from '../../components/ui/BaseModal.vue';
 import EmptyState from '../../components/ui/EmptyState.vue';
 import Pagination from '../../components/ui/Pagination.vue';
 import { useBatchSelection } from '../../composables/useBatchSelection';
 import { useDataStore } from '../../stores/data';
 import { useToastStore } from '../../stores/toast';
-import type { Node } from '../../types/index';
+import type { Node, OptimalConfig } from '../../types/index';
 import { createNode, parseImportText } from '../../utils/importer';
 import ManualNodeCard from './components/ManualNodeCard.vue';
 
@@ -83,6 +84,16 @@ const changePage = (page: number) => {
     }
 };
 
+// 计算优选配置的使用情况
+const optimalConfigStats = computed(() => {
+    return optimalConfigs.value.map((config) => ({
+        ...config,
+        usageCount: manualNodes.value.filter(
+            (node) => node.optimalConfigIds && node.optimalConfigIds.includes(config.id)
+        ).length
+    }));
+});
+
 // State
 const showNodesMoreMenu = ref(false);
 const nodesMoreMenuRef = ref<HTMLElement | null>(null);
@@ -91,6 +102,7 @@ const nodesMoreMenuRef = ref<HTMLElement | null>(null);
 const isNewNode = ref(false);
 const editingNode = ref<Node | null>(null);
 const showNodeModal = ref(false);
+const showOptimalConfigsModal = ref(false);
 const showBulkImportModal = ref(false);
 const showSubscriptionImportModal = ref(false);
 const showDeleteNodesModal = ref(false);
@@ -276,6 +288,35 @@ onUnmounted(() => {
 
 <template>
     <div class="w-full">
+        <!-- 优选配置统计卡片 -->
+        <div v-if="optimalConfigStats.length > 0" class="mb-6 rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-4 dark:border-blue-800 dark:from-blue-900/30 dark:to-indigo-900/30">
+            <div class="flex flex-col gap-3">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-bold text-blue-900 dark:text-blue-200">
+                        🎯 优选配置
+                    </h3>
+                    <button
+                        class="text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                        @click="showOptimalConfigsModal = true"
+                    >
+                        查看全部 →
+                    </button>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <div
+                        v-for="config in optimalConfigStats"
+                        :key="config.id"
+                        class="inline-flex items-center gap-2 rounded-lg bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-900/50 dark:text-blue-300"
+                    >
+                        <span>{{ config.name }}</span>
+                        <span class="rounded-full bg-blue-200 px-2 py-0.5 text-xs dark:bg-blue-800">
+                            {{ config.usageCount }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="mb-8 flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
             <div class="flex items-center gap-4"></div>
 
@@ -624,5 +665,67 @@ onUnmounted(() => {
             :add-nodes-from-bulk="dataStore.addNodesFromBulk"
             :on-import-success="handleSubscriptionImportSuccess"
         />
+
+        <!-- 查看所有优选配置的模态框 -->
+        <BaseModal
+            :show="showOptimalConfigsModal"
+            size="2xl"
+            @update:show="showOptimalConfigsModal = $event"
+        >
+            <template #title>
+                <h3 class="text-lg font-bold text-gray-900 dark:text-white">
+                    🎯 所有优选配置
+                </h3>
+            </template>
+
+            <template #body>
+                <div class="space-y-3">
+                    <p v-if="optimalConfigStats.length > 0" class="text-sm text-gray-600 dark:text-gray-400">
+                        共 <span class="font-semibold">{{ optimalConfigStats.length }}</span> 个优选配置
+                    </p>
+                    <div v-if="optimalConfigStats.length > 0" class="max-h-96 space-y-2 overflow-y-auto">
+                        <div
+                            v-for="config in optimalConfigStats"
+                            :key="config.id"
+                            class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800"
+                        >
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="flex-1">
+                                    <h4 class="font-semibold text-gray-900 dark:text-white">
+                                        {{ config.name }}
+                                    </h4>
+                                    <p v-if="config.description" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                        {{ config.description }}
+                                    </p>
+                                    <div class="mt-2 flex flex-wrap gap-2 text-xs">
+                                        <span class="inline-flex items-center gap-1 rounded-lg bg-blue-100 px-2 py-1 text-blue-700 dark:bg-blue-900 dark:text-blue-200">
+                                            {{ config.type === 'domain' ? '🌐 域名' : config.type === 'ip' ? '📍 IP' : '🔗 混合' }}
+                                        </span>
+                                        <span class="inline-flex items-center gap-1 rounded-lg bg-purple-100 px-2 py-1 text-purple-700 dark:bg-purple-900 dark:text-purple-200">
+                                            📊 {{ config.items?.length || 0 }} 项
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="flex-shrink-0 text-right">
+                                    <div class="rounded-lg bg-green-100 px-3 py-2 text-center dark:bg-green-900/30">
+                                        <div class="text-2xl font-bold text-green-700 dark:text-green-300">
+                                            {{ config.usageCount }}
+                                        </div>
+                                        <div class="text-xs text-green-600 dark:text-green-400">
+                                            个节点使用
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div v-else class="space-y-3 text-center py-8">
+                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                            暂无优选配置
+                        </p>
+                    </div>
+                </div>
+            </template>
+        </BaseModal>
     </div>
 </template>
