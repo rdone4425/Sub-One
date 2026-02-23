@@ -195,9 +195,9 @@ onMounted(() => {
                 <template v-for="config in paginatedConfigs" :key="config.id">
                     <OptimizeCard
                         :config="config"
-                        @edit="openEditOptimalModal"
-                        @delete="confirmDelete"
-                        @refresh="handleRefreshOptimal"
+                        @edit="openEditOptimalModal(config)"
+                        @delete="confirmDelete(config.id)"
+                        @refresh="handleRefreshOptimal(config)"
                     />
                 </template>
             </div>
