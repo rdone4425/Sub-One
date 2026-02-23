@@ -434,7 +434,9 @@ export const useDataStore = defineStore('data', () => {
             createdAt: config.createdAt || Date.now(),
             updatedAt: config.updatedAt || Date.now()
         };
+        console.log('[DataStore] 添加优选配置:', normalizedConfig);
         optimalConfigs.value.unshift(normalizedConfig);
+        console.log('[DataStore] 当前优选配置总数:', optimalConfigs.value.length);
         return await saveData('新增优选配置');
     }
 

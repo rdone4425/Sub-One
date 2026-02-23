@@ -244,6 +244,11 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
                 ]);
                 const settings = { ...defaultSettings, ...(settingsData || {}) } as AppConfig;
                 const config = settings;
+                console.log('[API /data] 加载数据:', {
+                    subsCount: subs?.length,
+                    profilesCount: profiles?.length,
+                    optimalConfigsCount: optimalConfigs?.length
+                });
                 return new Response(JSON.stringify({ subs, profiles, config, optimalConfigs }), {
                     headers: { 'Content-Type': 'application/json' }
                 });
@@ -282,6 +287,12 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
                         { status: 400 }
                     );
                 }
+
+                console.log('[API /subs] 接收数据:', {
+                    subsCount: subs?.length,
+                    profilesCount: profiles?.length,
+                    optimalConfigsCount: optimalConfigs?.length
+                });
 
                 // 步骤3: 验证数据类型
                 if (!Array.isArray(subs) || !Array.isArray(profiles)) {
@@ -345,10 +356,12 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
                                 { status: 400 }
                             );
                         }
+                        console.log('[API /subs] 保存 optimalConfigs 到存储:', optimalConfigs);
                         storagePromises.push(storage.put(KV_KEY_OPTIMAL_CONFIGS, optimalConfigs));
                     }
 
                     await Promise.all(storagePromises);
+                    console.log('[API /subs] 数据保存成功');
                 } catch (kvError: any) {
                     console.error('[API Error /subs] 存储写入失败:', kvError);
                     return new Response(

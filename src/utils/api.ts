@@ -173,6 +173,13 @@ export async function saveSubs(
             return { success: false, message: '数据格式错误：subs 和 profiles 必须是数组' };
         }
 
+        console.log('[API] saveSubs - 正在保存数据', {
+            subsCount: subs.length,
+            profilesCount: profiles.length,
+            optimalConfigsCount: optimalConfigs?.length || 0,
+            optimalConfigs: optimalConfigs
+        });
+
         // 发送 POST 请求保存数据
         const response = await fetch('/api/subs', {
             method: 'POST',
@@ -191,11 +198,14 @@ export async function saveSubs(
             const errorData = (await response.json().catch(() => ({}))) as any;
             const errorMessage =
                 errorData.message || errorData.error || `服务器错误 (${response.status})`;
+            console.error('[API] saveSubs - 保存失败:', errorMessage);
             return { success: false, message: errorMessage };
         }
 
         // 返回服务器响应的 JSON 数据
-        return (await response.json()) as ApiResponse;
+        const result = (await response.json()) as ApiResponse;
+        console.log('[API] saveSubs - 保存成功:', result);
+        return result;
     } catch (error: unknown) {
         console.error('保存订阅数据失败:', error);
 
