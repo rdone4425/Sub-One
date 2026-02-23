@@ -191,13 +191,21 @@ const handleCopy = async (url: string) => {
             </div>
 
             <!-- 节点名称 -->
-            <div class="mb-4">
+            <div class="mb-4 flex items-center justify-between gap-2">
                 <h4
                     class="line-clamp-2 wrap-break-word text-base font-bold leading-snug text-gray-800 transition-all duration-300 hover:line-clamp-none dark:text-gray-100"
                     :title="node.name || '未命名节点'"
                 >
                     {{ node.name || '未命名节点' }}
                 </h4>
+                <!-- 优选数量标签 -->
+                <div
+                    v-if="nodeOptimalConfigs.length > 0"
+                    class="flex-shrink-0 inline-flex items-center gap-1 rounded-lg bg-purple-100 px-2 py-1 text-xs font-semibold text-purple-700 dark:bg-purple-900 dark:text-purple-200"
+                >
+                    <span>🎯</span>
+                    <span>{{ nodeOptimalConfigs.length }}</span>
+                </div>
             </div>
 
             <!-- 底部信息：地址 & 复制 -->
