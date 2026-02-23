@@ -25,6 +25,7 @@ const emit = defineEmits<{
     (e: 'edit'): void;
     (e: 'delete'): void;
     (e: 'refresh'): void;
+    (e: 'view-nodes'): void;
 }>();
 
 // ==================== Computed ====================
@@ -128,6 +129,12 @@ const typeLabel = computed(() => {
 
         <!-- 底部操作按钮 -->
         <div class="flex gap-2 pt-2">
+            <button
+                class="flex-1 rounded-lg bg-blue-100 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-all duration-300 hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-800"
+                @click="$emit('view-nodes')"
+            >
+                👁️ 查看节点
+            </button>
             <button
                 class="flex-1 rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 transition-all duration-300 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
                 @click="$emit('edit')"
