@@ -423,14 +423,34 @@ export const useDataStore = defineStore('data', () => {
     // ==================== Actions: OptimalConfigs ====================
 
     async function addOptimalConfig(config: OptimalConfig): Promise<boolean> {
-        optimalConfigs.value.unshift(config);
+        // 确保所有必需字段都存在
+        const normalizedConfig: OptimalConfig = {
+            ...config,
+            id: config.id || `opt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            enabled: config.enabled !== undefined ? config.enabled : true,
+            isGlobal: config.isGlobal !== undefined ? config.isGlobal : true,
+            type: config.type || 'domain',
+            items: config.items || [],
+            createdAt: config.createdAt || Date.now(),
+            updatedAt: config.updatedAt || Date.now()
+        };
+        optimalConfigs.value.unshift(normalizedConfig);
         return await saveData('新增优选配置');
     }
 
     async function updateOptimalConfig(config: OptimalConfig): Promise<boolean> {
-        const index = optimalConfigs.value.findIndex((c) => c.id === config.id);
+        // 确保所有必需字段都存在
+        const normalizedConfig: OptimalConfig = {
+            ...config,
+            enabled: config.enabled !== undefined ? config.enabled : true,
+            isGlobal: config.isGlobal !== undefined ? config.isGlobal : true,
+            type: config.type || 'domain',
+            items: config.items || [],
+            updatedAt: Date.now()
+        };
+        const index = optimalConfigs.value.findIndex((c) => c.id === normalizedConfig.id);
         if (index !== -1) {
-            optimalConfigs.value[index] = { ...config };
+            optimalConfigs.value[index] = normalizedConfig;
             return await saveData('更新优选配置');
         }
         return false;
@@ -451,7 +471,13 @@ export const useDataStore = defineStore('data', () => {
      */
     async function refreshOptimalConfigFromUrls(id: string): Promise<boolean> {
         const config = optimalConfigs.value.find((c) => c.id === id);
-        if (!config || !config.sourceUrls || config.sourceUrls.length === 0) {
+        if (!config) {
+            console.error(`Config ${id} not found`);
+            return false;
+        }
+
+        if (!config.sourceUrls || config.sourceUrls.length === 0) {
+            console.error(`No source URLs for config ${id}`);
             return false;
         }
 
@@ -487,9 +513,15 @@ export const useDataStore = defineStore('data', () => {
             if (allItems.length > 0) {
                 config.items = allItems;
                 config.updatedAt = Date.now();
+                // 确保配置对象有所有必需的字段
+                if (config.enabled === undefined) config.enabled = true;
+                if (config.isGlobal === undefined) config.isGlobal = true;
+                if (config.type === undefined) config.type = 'domain';
                 return await saveData(`刷新优选配置: ${config.name}`);
+            } else {
+                console.warn(`No items fetched for config ${id}`);
+                return false;
             }
-            return false;
         } catch (error) {
             console.error('Failed to refresh optimal config:', error);
             return false;

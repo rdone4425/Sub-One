@@ -31,22 +31,22 @@ const emit = defineEmits<{
 // ==================== Computed ====================
 
 const itemsPreview = computed(() => {
-    const items = props.config.items || [];
+    const items = props.config?.items || [];
     return items.slice(0, 3).join('\n');
 });
 
 const hasMoreItems = computed(() => {
-    return (props.config.items || []).length > 3;
+    return (props.config?.items || []).length > 3;
 });
 
 const itemsCount = computed(() => {
-    return (props.config.items || []).length;
+    return (props.config?.items || []).length;
 });
 
 const statusIcon = computed(() => {
-    if (!props.config.enabled) return '🔒';
-    if (props.config.type === 'domain') return '🌐';
-    if (props.config.type === 'ip') return '📍';
+    if (props.config?.enabled === false) return '🔒';
+    if (props.config?.type === 'domain') return '🌐';
+    if (props.config?.type === 'ip') return '📍';
     return '🔗';
 });
 
@@ -56,7 +56,7 @@ const typeLabel = computed(() => {
         ip: 'IP地址',
         mixed: '混合'
     };
-    return map[props.config.type] || props.config.type;
+    return map[props.config?.type as 'domain' | 'ip' | 'mixed'] || props.config?.type || 'unknown';
 });
 </script>
 
@@ -66,7 +66,7 @@ const typeLabel = computed(() => {
     >
         <!-- 启用状态指示 -->
         <div
-            v-if="!config.enabled"
+            v-if="!(config?.enabled !== false)"
             class="absolute inset-0 rounded-2xl bg-gray-400/20 backdrop-blur-[1px]"
         />
 
@@ -74,10 +74,10 @@ const typeLabel = computed(() => {
         <div class="flex items-start justify-between gap-2">
             <div class="flex-1 pr-2">
                 <h3 class="text-sm font-bold text-gray-900 dark:text-white">
-                    {{ statusIcon }} {{ config.name }}
+                    {{ statusIcon }} {{ config?.name || '未命名' }}
                 </h3>
                 <p
-                    v-if="config.description"
+                    v-if="config?.description"
                     class="mt-1 text-xs text-gray-500 dark:text-gray-400"
                 >
                     {{ config.description }}
@@ -88,7 +88,7 @@ const typeLabel = computed(() => {
             <button
                 :class="[
                     'relative h-6 w-10 rounded-full transition-all duration-300',
-                    config.enabled
+                    (config?.enabled !== false)
                         ? 'bg-blue-500 shadow-md'
                         : 'bg-gray-300 dark:bg-gray-600'
                 ]"
@@ -97,7 +97,7 @@ const typeLabel = computed(() => {
                 <span
                     :class="[
                         'absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all duration-300',
-                        config.enabled ? 'right-0.5' : 'left-0.5'
+                        (config?.enabled !== false) ? 'right-0.5' : 'left-0.5'
                     ]"
                 />
             </button>
@@ -130,7 +130,7 @@ const typeLabel = computed(() => {
 
         <!-- 源 URL 信息 -->
         <div
-            v-if="config.sourceUrls && config.sourceUrls.length > 0"
+            v-if="config?.sourceUrls && config.sourceUrls.length > 0"
             class="space-y-1 rounded-lg bg-blue-50 p-2 dark:bg-blue-900/20"
         >
             <p class="text-xs font-semibold text-blue-700 dark:text-blue-200">
@@ -146,7 +146,7 @@ const typeLabel = computed(() => {
                     {{ url }}
                 </p>
                 <p
-                    v-if="config.sourceUrls.length > 2"
+                    v-if="config.sourceUrls && config.sourceUrls.length > 2"
                     class="text-xs text-blue-600 dark:text-blue-300"
                 >
                     ... 等 {{ config.sourceUrls.length - 2 }} 个源
@@ -163,7 +163,7 @@ const typeLabel = computed(() => {
                 ✏️ 编辑
             </button>
             <button
-                v-if="config.sourceUrls && config.sourceUrls.length > 0"
+                v-if="config?.sourceUrls && config.sourceUrls.length > 0"
                 class="flex-1 rounded-lg bg-green-100 px-3 py-1.5 text-xs font-semibold text-green-700 transition-all duration-300 hover:bg-green-200 dark:bg-green-900 dark:text-green-200 dark:hover:bg-green-800"
                 @click="$emit('refresh')"
                 title="从源 URL 刷新优选项"
@@ -179,7 +179,7 @@ const typeLabel = computed(() => {
         </div>
 
         <!-- 全局标签 -->
-        <div v-if="config.isGlobal" class="pt-1">
+        <div v-if="config?.isGlobal" class="pt-1">
             <span
                 class="inline-flex items-center gap-1 rounded-lg bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700 dark:bg-green-900 dark:text-green-200"
             >

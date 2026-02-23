@@ -223,8 +223,8 @@ const handleConfirm = () => {
 
     const config: OptimalConfig = {
         id: formData.value.id || `opt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        name: formData.value.name || '',
-        description: formData.value.description,
+        name: (formData.value.name || '').trim(),
+        description: formData.value.description ? (formData.value.description as string).trim() : undefined,
         items: formData.value.items || [],
         sourceUrls:
             inputMode.value === 'url' && urlInput.value.trim()
@@ -232,12 +232,16 @@ const handleConfirm = () => {
                       .split(',')
                       .map((u) => u.trim())
                       .filter((u) => u)
-                : formData.value.sourceUrls,
-        type: formData.value.type as 'domain' | 'ip' | 'mixed',
-        enabled: formData.value.enabled ?? true,
-        isGlobal: formData.value.isGlobal ?? true,
-        subscriptionIds: formData.value.subscriptionIds,
-        createdAt: formData.value.createdAt || Date.now(),
+                : (formData.value.sourceUrls && formData.value.sourceUrls.length > 0
+                    ? formData.value.sourceUrls
+                    : undefined),
+        type: (formData.value.type as 'domain' | 'ip' | 'mixed') || 'domain',
+        enabled: formData.value.enabled !== undefined ? formData.value.enabled : true,
+        isGlobal: formData.value.isGlobal !== undefined ? formData.value.isGlobal : true,
+        subscriptionIds: formData.value.subscriptionIds && formData.value.subscriptionIds.length > 0
+            ? formData.value.subscriptionIds
+            : undefined,
+        createdAt: (formData.value.createdAt as number) || Date.now(),
         updatedAt: Date.now()
     };
 

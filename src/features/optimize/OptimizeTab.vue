@@ -133,10 +133,16 @@ const handleDeleteConfirm = async () => {
 
 const handleToggleEnable = async (config: OptimalConfig) => {
     try {
-        const updated = { ...config, enabled: !config.enabled };
+        // 确保 enabled 字段有正确的值
+        const currentEnabled = config.enabled !== undefined ? config.enabled : true;
+        const updated = {
+            ...config,
+            enabled: !currentEnabled,
+            updatedAt: Date.now()
+        };
         await dataStore.updateOptimalConfig(updated);
         showToast(
-            updated.enabled ? '✅ 配置已启用' : '✅ 配置已禁用',
+            !currentEnabled ? '✅ 配置已启用' : '✅ 配置已禁用',
             'success'
         );
     } catch (error) {
