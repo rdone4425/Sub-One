@@ -24,6 +24,7 @@ const props = defineProps<{
     isBatchMode?: boolean;
     isSelected?: boolean;
     optimalConfigs?: OptimalConfig[];
+    optimalConfigStats?: Array<OptimalConfig & { usageCount: number }>;
 }>();
 
 const emit = defineEmits<{
@@ -42,14 +43,16 @@ const protocol = computed(() => {
 /** 协议样式配置 - 不同协议使用不同的渐变色 and 图标 */
 const protocolInfo = computed(() => getProtocolInfo(protocol.value));
 
-/** 获取此节点使用的优选配置 */
+/** 获取此节点使用的优选配置及其使用统计 */
 const nodeOptimalConfigs = computed(() => {
-    if (!props.node?.optimalConfigIds || !props.optimalConfigs) {
+    if (!props.node?.optimalConfigIds) {
         return [];
     }
-    return props.optimalConfigs.filter((config) =>
-        props.node.optimalConfigIds?.includes(config.id)
-    );
+
+    const stats = props.optimalConfigStats || [];
+    return props.node.optimalConfigIds
+        .map(id => stats.find(config => config.id === id))
+        .filter(Boolean) as Array<OptimalConfig & { usageCount: number }>;
 });
 
 /** 复制节点链接到剪贴板 */
@@ -132,10 +135,13 @@ const handleCopy = async (url: string) => {
                         v-for="config in nodeOptimalConfigs"
                         :key="config.id"
                         class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-bold uppercase tracking-wide shadow-sm shrink-0 bg-blue-100 text-blue-700 border-transparent bg-opacity-10 dark:bg-opacity-20 dark:text-blue-200"
-                        :title="config.name"
+                        :title="`${config.name} - ${config.usageCount}个节点使用`"
                     >
                         <span class="text-sm font-normal drop-shadow-sm">🎯</span>
                         <span>{{ config.type }}</span>
+                        <span class="ml-0.5 inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-200 text-blue-900 dark:bg-blue-800 dark:text-blue-100 text-xs font-bold">
+                            {{ config.usageCount }}
+                        </span>
                     </span>
                 </div>
 
