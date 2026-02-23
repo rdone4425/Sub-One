@@ -17,12 +17,11 @@ import { computed, defineAsyncComponent, onMounted, ref } from 'vue';
 import { storeToRefs } from 'pinia';
 
 import ConfirmModal from '../../components/ui/ConfirmModal.vue';
-import BaseModal from '../../components/ui/BaseModal.vue';
 import EmptyState from '../../components/ui/EmptyState.vue';
 import Pagination from '../../components/ui/Pagination.vue';
 import { useDataStore } from '../../stores/data';
 import { useToastStore } from '../../stores/toast';
-import type { OptimalConfig, Node } from '../../types/index';
+import type { OptimalConfig } from '../../types/index';
 
 // 异步加载编辑模态框
 const OptimizeEditModal = defineAsyncComponent(
@@ -47,7 +46,7 @@ const emit = defineEmits<{
 
 const { showToast } = useToastStore();
 const dataStore = useDataStore();
-const { optimalConfigs, manualNodes } = storeToRefs(dataStore);
+const { optimalConfigs } = storeToRefs(dataStore);
 
 // ==================== State ====================
 
@@ -76,19 +75,6 @@ const editingOptimal = ref<OptimalConfig | null>(null);
 
 const showDeleteModal = ref(false);
 const deletingItemId = ref<string | null>(null);
-
-const showNodesModal = ref(false);
-const selectedOptimalForNodes = ref<OptimalConfig | null>(null);
-
-// ==================== Computed Properties ====================
-
-const nodesUsingOptimal = computed(() => {
-    if (!selectedOptimalForNodes.value) return [];
-    const configId = selectedOptimalForNodes.value.id;
-    return manualNodes.value.filter(
-        (node) => node.optimalConfigIds && node.optimalConfigIds.includes(configId)
-    );
-});
 
 // ==================== Modal Functions ====================
 
@@ -143,11 +129,6 @@ const handleDeleteConfirm = async () => {
     } catch (error) {
         showToast(`❌ 删除失败: ${error instanceof Error ? error.message : '未知错误'}`, 'error');
     }
-};
-
-const handleViewNodes = (config: OptimalConfig) => {
-    selectedOptimalForNodes.value = config;
-    showNodesModal.value = true;
 };
 
 const handleRefreshOptimal = async (config: OptimalConfig) => {
@@ -217,7 +198,6 @@ onMounted(() => {
                         @edit="openEditOptimalModal(config)"
                         @delete="confirmDelete(config.id)"
                         @refresh="handleRefreshOptimal(config)"
-                        @view-nodes="handleViewNodes(config)"
                     />
                 </template>
             </div>
@@ -273,62 +253,4 @@ onMounted(() => {
             </p>
         </template>
     </ConfirmModal>
-
-    <!-- 查看节点模态框 -->
-    <BaseModal
-        :show="showNodesModal"
-        size="2xl"
-        @update:show="showNodesModal = $event"
-    >
-        <template #title>
-            <h3 class="text-lg font-bold text-gray-900 dark:text-white">
-                📍 使用此优选配置的节点
-            </h3>
-        </template>
-
-        <template #body>
-            <div v-if="nodesUsingOptimal.length > 0" class="space-y-3">
-                <p class="text-sm text-gray-600 dark:text-gray-400">
-                    以下 <span class="font-semibold">{{ nodesUsingOptimal.length }}</span> 个节点正在使用此优选配置
-                </p>
-                <div class="max-h-96 space-y-2 overflow-y-auto">
-                    <div
-                        v-for="node in nodesUsingOptimal"
-                        :key="node.id"
-                        class="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800"
-                    >
-                        <div class="flex items-center justify-between">
-                            <div class="flex-1">
-                                <p class="font-semibold text-gray-900 dark:text-white">
-                                    {{ node.name || '未命名节点' }}
-                                </p>
-                                <p v-if="node.url" class="truncate text-xs text-gray-500 dark:text-gray-400">
-                                    {{ node.url }}
-                                </p>
-                            </div>
-                            <div class="ml-2 flex-shrink-0">
-                                <span
-                                    :class="{
-                                        'inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold': true,
-                                        'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200': node.enabled,
-                                        'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200': !node.enabled
-                                    }"
-                                >
-                                    {{ node.enabled ? '✅ 启用' : '❌ 禁用' }}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div v-else class="space-y-3 text-center py-8">
-                <p class="text-sm text-gray-500 dark:text-gray-400">
-                    暂无节点使用此优选配置
-                </p>
-                <p class="text-xs text-gray-400 dark:text-gray-500">
-                    在编辑节点时选择此优选配置即可
-                </p>
-            </div>
-        </template>
-    </BaseModal>
 </template>

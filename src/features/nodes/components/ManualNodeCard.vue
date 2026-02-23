@@ -15,7 +15,7 @@
 import { computed } from 'vue';
 
 import { useToastStore } from '../../../stores/toast';
-import type { Node } from '../../../types/index';
+import type { Node, OptimalConfig } from '../../../types/index';
 import { getProtocol, getProtocolInfo } from '../../../utils/protocols';
 import { copyToClipboard } from '../../../utils/utils';
 
@@ -23,6 +23,7 @@ const props = defineProps<{
     node: Node;
     isBatchMode?: boolean;
     isSelected?: boolean;
+    optimalConfigs?: OptimalConfig[];
 }>();
 
 const emit = defineEmits<{
@@ -40,6 +41,16 @@ const protocol = computed(() => {
 
 /** 协议样式配置 - 不同协议使用不同的渐变色 and 图标 */
 const protocolInfo = computed(() => getProtocolInfo(protocol.value));
+
+/** 获取此节点使用的优选配置 */
+const nodeOptimalConfigs = computed(() => {
+    if (!props.node?.optimalConfigIds || !props.optimalConfigs) {
+        return [];
+    }
+    return props.optimalConfigs.filter((config) =>
+        props.node.optimalConfigIds?.includes(config.id)
+    );
+});
 
 /** 复制节点链接到剪贴板 */
 const handleCopy = async (url: string) => {
@@ -176,6 +187,18 @@ const handleCopy = async (url: string) => {
                 >
                     {{ node.name || '未命名节点' }}
                 </h4>
+            </div>
+
+            <!-- 优选配置标签 -->
+            <div v-if="nodeOptimalConfigs.length > 0" class="mb-3 flex flex-wrap gap-2">
+                <span
+                    v-for="config in nodeOptimalConfigs"
+                    :key="config.id"
+                    class="inline-flex items-center gap-1 rounded-lg bg-blue-100 px-2 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-900 dark:text-blue-200"
+                    :title="config.name"
+                >
+                    🎯 {{ config.name }}
+                </span>
             </div>
 
             <!-- 底部信息：地址 & 复制 -->

@@ -47,7 +47,7 @@ const SubscriptionImportModal = defineAsyncComponent(
 // Utils
 const { showToast } = useToastStore();
 const dataStore = useDataStore();
-const { manualNodes } = storeToRefs(dataStore);
+const { manualNodes, optimalConfigs } = storeToRefs(dataStore);
 
 // Local State
 const searchTerm = ref('');
@@ -535,6 +535,7 @@ onUnmounted(() => {
                             :node="node"
                             :is-batch-mode="isBatchDeleteMode"
                             :is-selected="isSelected(node.id)"
+                            :optimal-configs="optimalConfigs"
                             @edit="handleEditNode(node.id)"
                             @delete="handleDeleteNode(node.id)"
                             @toggle-select="toggleSelection(node.id)"
@@ -551,6 +552,7 @@ onUnmounted(() => {
                         :node="node"
                         :is-batch-mode="isBatchDeleteMode"
                         :is-selected="isSelected(node.id)"
+                        :optimal-configs="optimalConfigs"
                         @edit="handleEditNode(node.id)"
                         @delete="handleDeleteNode(node.id)"
                         @toggle-select="toggleSelection(node.id)"
