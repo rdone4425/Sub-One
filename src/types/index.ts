@@ -116,6 +116,43 @@ export type Profile = SharedProfile & {
 // -------------------- 应用配置 (AppConfig) --------------------
 export type AppConfig = SharedAppConfig;
 
+// -------------------- 优选配置 (OptimalConfig) --------------------
+/**
+ * 优选配置接口
+ * 存储优选域名和IP信息
+ */
+export interface OptimalConfig {
+    /** 唯一标识符 */
+    id: string;
+
+    /** 配置名称 */
+    name: string;
+
+    /** 配置描述 */
+    description?: string;
+
+    /** 优选项列表 (域名或IP，支持多个，每行一个) */
+    items: string[];
+
+    /** 配置类型: domain | ip | mixed */
+    type: 'domain' | 'ip' | 'mixed';
+
+    /** 是否启用此配置 */
+    enabled: boolean;
+
+    /** 创建时间戳 */
+    createdAt: number;
+
+    /** 更新时间戳 */
+    updatedAt: number;
+
+    /** 是否为全局配置（所有订阅使用） */
+    isGlobal: boolean;
+
+    /** 关联的订阅ID（如果不是全局配置） */
+    subscriptionIds?: string[];
+}
+
 // ==================== 4. 工具类型定义 ====================
 
 /**

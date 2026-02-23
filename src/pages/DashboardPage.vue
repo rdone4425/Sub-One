@@ -33,6 +33,7 @@ import { type PropType, onMounted, ref } from 'vue';
 import DashboardHome from '../features/dashboard/DashboardHome.vue';
 import NodesTab from '../features/nodes/NodesTab.vue';
 import NodeDetailsModal from '../features/nodes/components/NodeDetailsModal.vue';
+import OptimizeTab from '../features/optimize/OptimizeTab.vue';
 import ProfilesTab from '../features/profiles/ProfilesTab.vue';
 import SubscriptionsTab from '../features/subscriptions/SubscriptionsTab.vue';
 import { useDataStore } from '../stores/data';
@@ -224,6 +225,13 @@ const handleShowProfileNodeDetails = (profile: Profile) => {
                 <!-- 手动节点标签页 -->
                 <NodesTab
                     v-if="activeTab === 'nodes'"
+                    :tab-action="tabAction"
+                    @action-handled="tabAction = null"
+                />
+
+                <!-- 优选管理标签页 -->
+                <OptimizeTab
+                    v-if="activeTab === 'optimize'"
                     :tab-action="tabAction"
                     @action-handled="tabAction = null"
                 />

@@ -133,6 +133,15 @@ const navigationItems = computed<NavigationItem[]>(() => [
         gradient: 'from-green-500 to-emerald-600',
         shadow: 'shadow-green-500/30',
         description: '管理节点'
+    },
+
+    {
+        id: 'optimize',
+        label: '优选管理',
+        icon: 'optimize',
+        gradient: 'from-cyan-500 to-blue-600',
+        shadow: 'shadow-cyan-500/30',
+        description: '优选域名/IP'
     }
 ]);
 

@@ -2,7 +2,7 @@ import { computed, ref } from 'vue';
 
 import { defineStore } from 'pinia';
 
-import type { AppConfig, Node, Profile, Subscription } from '../types/index';
+import type { AppConfig, Node, OptimalConfig, Profile, Subscription } from '../types/index';
 import * as api from '../utils/api';
 import { HTTP_REGEX } from '../utils/constants';
 import { generateShortId, generateUUID } from '../utils/utils';
@@ -18,6 +18,7 @@ export const useDataStore = defineStore('data', () => {
     const subscriptions = ref<Subscription[]>([]);
     const manualNodes = ref<Node[]>([]);
     const profiles = ref<Profile[]>([]);
+    const optimalConfigs = ref<OptimalConfig[]>([]);
     const config = ref<AppConfig>({
         // Auth & Security
         mytoken: 'auto',
@@ -68,7 +69,7 @@ export const useDataStore = defineStore('data', () => {
     // ==================== Actions: Initialization ====================
 
     // Initialize store with fetched data
-    function initData(data: { subs?: any[]; profiles?: Profile[]; config?: AppConfig }) {
+    function initData(data: { subs?: any[]; profiles?: Profile[]; config?: AppConfig; optimalConfigs?: OptimalConfig[] }) {
         if (!data) return;
 
         // Split subs into subscriptions (http) and manual nodes (others)
@@ -83,6 +84,7 @@ export const useDataStore = defineStore('data', () => {
         ) as Node[];
 
         profiles.value = data.profiles || [];
+        optimalConfigs.value = data.optimalConfigs || [];
 
         if (data.config) {
             config.value = { ...config.value, ...data.config };
@@ -109,6 +111,7 @@ export const useDataStore = defineStore('data', () => {
         const payload = {
             subs: combinedSubs,
             profiles: profiles.value,
+            optimalConfigs: optimalConfigs.value,
             config: config.value
         };
 
@@ -417,6 +420,32 @@ export const useDataStore = defineStore('data', () => {
         });
     }
 
+    // ==================== Actions: OptimalConfigs ====================
+
+    async function addOptimalConfig(config: OptimalConfig): Promise<boolean> {
+        optimalConfigs.value.unshift(config);
+        return await saveData('新增优选配置');
+    }
+
+    async function updateOptimalConfig(config: OptimalConfig): Promise<boolean> {
+        const index = optimalConfigs.value.findIndex((c) => c.id === config.id);
+        if (index !== -1) {
+            optimalConfigs.value[index] = { ...config };
+            return await saveData('更新优选配置');
+        }
+        return false;
+    }
+
+    async function deleteOptimalConfig(id: string): Promise<boolean> {
+        optimalConfigs.value = optimalConfigs.value.filter((c) => c.id !== id);
+        return await saveData('删除优选配置');
+    }
+
+    async function deleteAllOptimalConfigs(): Promise<boolean> {
+        optimalConfigs.value = [];
+        return await saveData('清空优选配置');
+    }
+
     // ==================== Actions: Config ====================
     function updateConfig(newConfig: Partial<AppConfig>) {
         config.value = { ...config.value, ...newConfig };
@@ -432,6 +461,7 @@ export const useDataStore = defineStore('data', () => {
         subscriptions,
         manualNodes,
         profiles,
+        optimalConfigs,
         config,
         isInitialized,
         isLoading,
@@ -473,6 +503,12 @@ export const useDataStore = defineStore('data', () => {
         deleteAllProfiles,
         batchDeleteProfiles,
         toggleProfile,
+
+        // OptimalConfig Actions
+        addOptimalConfig,
+        updateOptimalConfig,
+        deleteOptimalConfig,
+        deleteAllOptimalConfigs,
 
         // Config Actions
         updateConfig
