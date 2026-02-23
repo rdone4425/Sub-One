@@ -142,6 +142,14 @@ const navigationItems = computed<NavigationItem[]>(() => [
         gradient: 'from-cyan-500 to-blue-600',
         shadow: 'shadow-cyan-500/30',
         description: '优选域名/IP'
+    },
+    {
+        id: 'optimal-nodes',
+        label: '优选节点',
+        icon: 'optimal-nodes',
+        gradient: 'from-amber-500 to-orange-600',
+        shadow: 'shadow-amber-500/30',
+        description: '查看展开的节点'
     }
 ]);
 
@@ -480,6 +488,40 @@ onUnmounted(() => {
                                     stroke-linejoin="round"
                                     stroke-width="2"
                                     d="M13 10V3L4 14h7v7l9-11h-7z"
+                                />
+                            </svg>
+
+                            <!-- Optimize 图标（靶心） -->
+                            <svg
+                                v-else-if="item.icon === 'optimize'"
+                                xmlns="http://www.w3.org/2000/svg"
+                                class="h-5 w-5"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                            >
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                                />
+                            </svg>
+
+                            <!-- Optimal Nodes 图标（星光展开） -->
+                            <svg
+                                v-else-if="item.icon === 'optimal-nodes'"
+                                xmlns="http://www.w3.org/2000/svg"
+                                class="h-5 w-5"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                            >
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
                                 />
                             </svg>
                         </div>
