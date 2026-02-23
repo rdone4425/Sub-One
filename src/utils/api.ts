@@ -655,3 +655,50 @@ export async function restoreSnapshot(
         return { success: false, message: '网络请求失败' };
     }
 }
+
+// ==================== 优选配置查询 ====================
+
+/**
+ * 获取使用特定优选配置的所有节点
+ *
+ * 说明：
+ * - 从后端查询哪些手动节点使用了指定的优选配置
+ * - 返回节点数量和节点详细信息
+ *
+ * @param configId - 优选配置的 ID
+ * @returns {Promise} 返回包含节点列表的结果，失败返回空数组
+ */
+export async function getNodesUsingOptimalConfig(
+    configId: string
+): Promise<{
+    success: boolean;
+    configId?: string;
+    nodeCount?: number;
+    nodes?: Array<{
+        id: string;
+        name: string;
+        type: string;
+        server: string;
+        port: string;
+        protocol: string;
+    }>;
+    error?: string;
+}> {
+    try {
+        const response = await fetch('/api/optimal_config/nodes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ configId })
+        });
+
+        if (!response.ok) {
+            console.error('获取优选配置使用的节点失败，状态码:', response.status);
+            return { success: false, nodeCount: 0, nodes: [] };
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error('获取优选配置使用的节点失败:', error);
+        return { success: false, nodeCount: 0, nodes: [], error: String(error) };
+    }
+}

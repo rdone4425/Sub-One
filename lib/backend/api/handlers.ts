@@ -392,6 +392,70 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
             }
         }
 
+        case '/optimal_config/nodes': {
+            if (request.method !== 'POST')
+                return new Response('Method Not Allowed', { status: 405 });
+
+            try {
+                const { configId } = (await request.json()) as {
+                    configId?: string;
+                };
+
+                if (!configId) {
+                    return new Response(
+                        JSON.stringify({ error: 'Missing configId parameter' }),
+                        { status: 400 }
+                    );
+                }
+
+                const storage = await getStorage(env);
+                const allSubs = (await storage.get<Subscription[]>(KV_KEY_SUBS)) || [];
+
+                // 手动节点是 url 不是 HTTP 的 Subscription
+                // 或者根据 Subscription 的 type 字段（如果有的话）
+                const HTTP_REGEX = /^https?:\/\//;
+                const manualNodes = allSubs.filter(
+                    (item: any) =>
+                        !item.url || !HTTP_REGEX.test(item.url) || (item.type && item.type !== 'subscription')
+                );
+
+                // 筛选使用此优选配置的节点
+                const matchingNodes = manualNodes
+                    .filter((node: any) =>
+                        node.optimalConfigIds && node.optimalConfigIds.includes(configId)
+                    )
+                    .map((n: any) => ({
+                        id: n.id,
+                        name: n.name || '未命名',
+                        type: n.type || 'unknown',
+                        server: n.server || '',
+                        port: n.port || '',
+                        protocol: n.protocol || ''
+                    }));
+
+                console.log(
+                    `[API /optimal_config/nodes] configId: ${configId}, 找到 ${matchingNodes.length} 个节点`
+                );
+
+                return new Response(
+                    JSON.stringify({
+                        success: true,
+                        configId,
+                        nodeCount: matchingNodes.length,
+                        nodes: matchingNodes
+                    }),
+                    { headers: { 'Content-Type': 'application/json' } }
+                );
+            } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e);
+                console.error('[API Error /optimal_config/nodes]', msg);
+                return new Response(
+                    JSON.stringify({ success: false, error: '查询失败: ' + msg }),
+                    { status: 500 }
+                );
+            }
+        }
+
         case '/node_count': {
             if (request.method !== 'POST')
                 return new Response('Method Not Allowed', { status: 405 });

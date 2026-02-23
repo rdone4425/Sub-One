@@ -17,11 +17,13 @@ import { computed, defineAsyncComponent, onMounted, ref } from 'vue';
 import { storeToRefs } from 'pinia';
 
 import ConfirmModal from '../../components/ui/ConfirmModal.vue';
+import BaseModal from '../../components/ui/BaseModal.vue';
 import EmptyState from '../../components/ui/EmptyState.vue';
 import Pagination from '../../components/ui/Pagination.vue';
 import { useDataStore } from '../../stores/data';
 import { useToastStore } from '../../stores/toast';
 import type { OptimalConfig } from '../../types/index';
+import { getNodesUsingOptimalConfig } from '../../utils/api';
 
 // 异步加载编辑模态框
 const OptimizeEditModal = defineAsyncComponent(
@@ -75,6 +77,11 @@ const editingOptimal = ref<OptimalConfig | null>(null);
 
 const showDeleteModal = ref(false);
 const deletingItemId = ref<string | null>(null);
+
+const showNodesModal = ref(false);
+const viewingConfigId = ref<string | null>(null);
+const nodesData = ref<any[]>([]);
+const nodesLoading = ref(false);
 
 // ==================== Modal Functions ====================
 
@@ -150,6 +157,30 @@ const handleRefreshOptimal = async (config: OptimalConfig) => {
     }
 };
 
+const handleViewNodes = async (config: OptimalConfig) => {
+    viewingConfigId.value = config.id;
+    nodesLoading.value = true;
+    showNodesModal.value = true;
+
+    try {
+        const result = await getNodesUsingOptimalConfig(config.id);
+        if (result.success && result.nodes) {
+            nodesData.value = result.nodes;
+            if (result.nodeCount === 0) {
+                showToast('ℹ️ 暂无节点使用此配置', 'info');
+            }
+        } else {
+            showToast('❌ 获取节点列表失败', 'error');
+            nodesData.value = [];
+        }
+    } catch (error) {
+        showToast(`❌ 查询失败: ${error instanceof Error ? error.message : '未知错误'}`, 'error');
+        nodesData.value = [];
+    } finally {
+        nodesLoading.value = false;
+    }
+};
+
 // ==================== Lifecycle ====================
 
 onMounted(() => {
@@ -198,6 +229,7 @@ onMounted(() => {
                         @edit="openEditOptimalModal(config)"
                         @delete="confirmDelete(config.id)"
                         @refresh="handleRefreshOptimal(config)"
+                        @view-nodes="handleViewNodes(config)"
                     />
                 </template>
             </div>
@@ -253,4 +285,62 @@ onMounted(() => {
             </p>
         </template>
     </ConfirmModal>
+
+    <!-- 查看节点模态框 -->
+    <BaseModal
+        :show="showNodesModal"
+        size="2xl"
+        @update:show="showNodesModal = $event"
+    >
+        <template #title>
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white">
+                👁️ 使用此配置的节点
+            </h3>
+        </template>
+
+        <template #body>
+            <div class="space-y-4">
+                <div v-if="nodesLoading" class="flex items-center justify-center py-8">
+                    <div class="h-6 w-6 animate-spin rounded-full border-2 border-gray-300 border-t-indigo-600"></div>
+                    <span class="ml-3 text-sm text-gray-600 dark:text-gray-400">加载中...</span>
+                </div>
+
+                <div v-else-if="nodesData.length > 0" class="space-y-3 max-h-96 overflow-y-auto">
+                    <p class="text-sm text-gray-600 dark:text-gray-400">
+                        共 <span class="font-semibold text-indigo-600 dark:text-indigo-400">{{ nodesData.length }}</span> 个节点使用此配置
+                    </p>
+                    <div
+                        v-for="node in nodesData"
+                        :key="node.id"
+                        class="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800"
+                    >
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="flex-1 min-w-0">
+                                <h4 class="font-semibold text-gray-900 dark:text-white truncate">
+                                    {{ node.name }}
+                                </h4>
+                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                                    <span v-if="node.type" class="block">
+                                        📝 类型: <span class="font-mono">{{ node.type }}</span>
+                                    </span>
+                                    <span v-if="node.protocol" class="block">
+                                        🔗 协议: <span class="font-mono">{{ node.protocol }}</span>
+                                    </span>
+                                    <span v-if="node.server" class="block">
+                                        🖥️ 服务器: <span class="font-mono">{{ node.server }}{{ node.port ? ':' + node.port : '' }}</span>
+                                    </span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-else class="py-8 text-center">
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                        暂无节点使用此配置
+                    </p>
+                </div>
+            </div>
+        </template>
+    </BaseModal>
 </template>

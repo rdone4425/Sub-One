@@ -25,6 +25,7 @@ const emit = defineEmits<{
     (e: 'edit'): void;
     (e: 'delete'): void;
     (e: 'refresh'): void;
+    (e: 'view-nodes'): void;
 }>();
 
 // ==================== Computed ====================
@@ -127,26 +128,35 @@ const typeLabel = computed(() => {
         </div>
 
         <!-- 底部操作按钮 -->
-        <div class="flex gap-2 pt-2">
+        <div class="flex flex-col gap-2 pt-2">
+            <div class="flex gap-2">
+                <button
+                    class="flex-1 rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 transition-all duration-300 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+                    @click="$emit('edit')"
+                >
+                    ✏️ 编辑
+                </button>
+                <button
+                    v-if="config?.sourceUrls && config.sourceUrls.length > 0"
+                    class="flex-1 rounded-lg bg-green-100 px-3 py-1.5 text-xs font-semibold text-green-700 transition-all duration-300 hover:bg-green-200 dark:bg-green-900 dark:text-green-200 dark:hover:bg-green-800"
+                    @click="$emit('refresh')"
+                    title="从源 URL 刷新优选项"
+                >
+                    🔄 刷新
+                </button>
+                <button
+                    class="flex-1 rounded-lg bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-700 transition-all duration-300 hover:bg-red-200 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800"
+                    @click="$emit('delete')"
+                >
+                    🗑️ 删除
+                </button>
+            </div>
             <button
-                class="flex-1 rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 transition-all duration-300 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
-                @click="$emit('edit')"
+                class="w-full rounded-lg bg-indigo-100 px-3 py-1.5 text-xs font-semibold text-indigo-700 transition-all duration-300 hover:bg-indigo-200 dark:bg-indigo-900/40 dark:text-indigo-300 dark:hover:bg-indigo-900"
+                @click="$emit('view-nodes')"
+                title="查看使用此配置的节点"
             >
-                ✏️ 编辑
-            </button>
-            <button
-                v-if="config?.sourceUrls && config.sourceUrls.length > 0"
-                class="flex-1 rounded-lg bg-green-100 px-3 py-1.5 text-xs font-semibold text-green-700 transition-all duration-300 hover:bg-green-200 dark:bg-green-900 dark:text-green-200 dark:hover:bg-green-800"
-                @click="$emit('refresh')"
-                title="从源 URL 刷新优选项"
-            >
-                🔄 刷新
-            </button>
-            <button
-                class="flex-1 rounded-lg bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-700 transition-all duration-300 hover:bg-red-200 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800"
-                @click="$emit('delete')"
-            >
-                🗑️ 删除
+                👁️ 查看节点
             </button>
         </div>
 
