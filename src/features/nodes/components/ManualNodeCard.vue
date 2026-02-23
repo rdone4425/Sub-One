@@ -79,9 +79,9 @@ const handleCopy = async (url: string) => {
         <div class="h-1.5 w-full bg-linear-to-r opacity-80" :class="protocolInfo.gradient"></div>
 
         <div class="flex flex-1 flex-col p-5">
-            <!-- 头部：复选框 + 协议标签 + 操作按钮 -->
-            <div class="mb-4 flex items-start justify-between gap-3">
-                <div class="flex items-center gap-3 overflow-hidden">
+            <!-- 头部：复选框 + 协议标签 + 优选标签 + 操作按钮 -->
+            <div class="mb-4 flex items-center justify-between gap-2">
+                <div class="flex flex-wrap items-center gap-2 overflow-hidden min-w-0">
                     <!-- 批量模式复选框 -->
                     <div
                         v-if="isBatchMode"
@@ -114,7 +114,7 @@ const handleCopy = async (url: string) => {
 
                     <!-- 协议标签 (胶囊样式) -->
                     <span
-                        class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold uppercase tracking-wide shadow-sm"
+                        class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold uppercase tracking-wide shadow-sm shrink-0"
                         :class="[
                             protocolInfo.bg,
                             protocolInfo.color,
@@ -125,6 +125,17 @@ const handleCopy = async (url: string) => {
                             protocolInfo.icon
                         }}</span>
                         <span>{{ protocolInfo.text }}</span>
+                    </span>
+
+                    <!-- 优选配置标签 -->
+                    <span
+                        v-for="config in nodeOptimalConfigs"
+                        :key="config.id"
+                        class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-bold uppercase tracking-wide shadow-sm shrink-0 bg-blue-100 text-blue-700 border-transparent bg-opacity-10 dark:bg-opacity-20 dark:text-blue-200"
+                        :title="config.name"
+                    >
+                        <span class="text-sm font-normal drop-shadow-sm">🎯</span>
+                        <span>{{ config.type }}</span>
                     </span>
                 </div>
 
@@ -187,18 +198,6 @@ const handleCopy = async (url: string) => {
                 >
                     {{ node.name || '未命名节点' }}
                 </h4>
-            </div>
-
-            <!-- 优选配置标签 -->
-            <div v-if="nodeOptimalConfigs.length > 0" class="mb-3 flex flex-wrap gap-2">
-                <span
-                    v-for="config in nodeOptimalConfigs"
-                    :key="config.id"
-                    class="inline-flex items-center gap-1 rounded-lg bg-blue-100 px-2 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-900 dark:text-blue-200"
-                    :title="config.name"
-                >
-                    🎯 {{ config.name }}
-                </span>
             </div>
 
             <!-- 底部信息：地址 & 复制 -->
