@@ -134,6 +134,9 @@ export interface OptimalConfig {
     /** 优选项列表 (域名或IP，支持多个，每行一个) */
     items: string[];
 
+    /** 优选项来源 URL（用于更新优选项）*/
+    sourceUrls?: string[];
+
     /** 配置类型: domain | ip | mixed */
     type: 'domain' | 'ip' | 'mixed';
 

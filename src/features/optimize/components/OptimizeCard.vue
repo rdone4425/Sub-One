@@ -25,6 +25,7 @@ const emit = defineEmits<{
     (e: 'edit'): void;
     (e: 'delete'): void;
     (e: 'toggle'): void;
+    (e: 'refresh'): void;
 }>();
 
 // ==================== Computed ====================
@@ -127,6 +128,32 @@ const typeLabel = computed(() => {
             </span>
         </div>
 
+        <!-- 源 URL 信息 -->
+        <div
+            v-if="config.sourceUrls && config.sourceUrls.length > 0"
+            class="space-y-1 rounded-lg bg-blue-50 p-2 dark:bg-blue-900/20"
+        >
+            <p class="text-xs font-semibold text-blue-700 dark:text-blue-200">
+                🔗 数据来源:
+            </p>
+            <div class="space-y-0.5">
+                <p
+                    v-for="(url, idx) in config.sourceUrls.slice(0, 2)"
+                    :key="idx"
+                    class="truncate text-xs text-blue-600 dark:text-blue-300"
+                    :title="url"
+                >
+                    {{ url }}
+                </p>
+                <p
+                    v-if="config.sourceUrls.length > 2"
+                    class="text-xs text-blue-600 dark:text-blue-300"
+                >
+                    ... 等 {{ config.sourceUrls.length - 2 }} 个源
+                </p>
+            </div>
+        </div>
+
         <!-- 底部操作按钮 -->
         <div class="flex gap-2 pt-2">
             <button
@@ -134,6 +161,14 @@ const typeLabel = computed(() => {
                 @click="$emit('edit')"
             >
                 ✏️ 编辑
+            </button>
+            <button
+                v-if="config.sourceUrls && config.sourceUrls.length > 0"
+                class="flex-1 rounded-lg bg-green-100 px-3 py-1.5 text-xs font-semibold text-green-700 transition-all duration-300 hover:bg-green-200 dark:bg-green-900 dark:text-green-200 dark:hover:bg-green-800"
+                @click="$emit('refresh')"
+                title="从源 URL 刷新优选项"
+            >
+                🔄 刷新
             </button>
             <button
                 class="flex-1 rounded-lg bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-700 transition-all duration-300 hover:bg-red-200 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800"

@@ -144,6 +144,25 @@ const handleToggleEnable = async (config: OptimalConfig) => {
     }
 };
 
+const handleRefreshOptimal = async (config: OptimalConfig) => {
+    if (!config.sourceUrls || config.sourceUrls.length === 0) {
+        showToast('❌ 此配置没有设置源 URL', 'error');
+        return;
+    }
+
+    try {
+        showToast('⏳ 正在刷新优选项...', 'info');
+        const success = await dataStore.refreshOptimalConfigFromUrls(config.id);
+        if (success) {
+            showToast('✅ 优选项已刷新', 'success');
+        } else {
+            showToast('❌ 刷新失败，请检查源 URL', 'error');
+        }
+    } catch (error) {
+        showToast(`❌ 刷新失败: ${error instanceof Error ? error.message : '未知错误'}`, 'error');
+    }
+};
+
 // ==================== Lifecycle ====================
 
 onMounted(() => {
@@ -192,6 +211,7 @@ onMounted(() => {
                         @edit="openEditOptimalModal"
                         @delete="confirmDelete"
                         @toggle="handleToggleEnable"
+                        @refresh="handleRefreshOptimal"
                     />
                 </template>
             </div>

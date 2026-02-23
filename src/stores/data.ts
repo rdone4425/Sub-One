@@ -446,6 +446,56 @@ export const useDataStore = defineStore('data', () => {
         return await saveData('清空优选配置');
     }
 
+    /**
+     * 从源 URL 更新优选配置的项目列表
+     */
+    async function refreshOptimalConfigFromUrls(id: string): Promise<boolean> {
+        const config = optimalConfigs.value.find((c) => c.id === id);
+        if (!config || !config.sourceUrls || config.sourceUrls.length === 0) {
+            return false;
+        }
+
+        try {
+            const allItems: string[] = [];
+            const itemSet = new Set<string>();
+
+            for (const url of config.sourceUrls) {
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+
+                    const content = await response.text();
+                    const lines = content.split('\n');
+
+                    lines.forEach((line) => {
+                        const trimmed = line.trim();
+                        if (trimmed && !trimmed.startsWith('#')) {
+                            const item = trimmed.split('#')[0].trim();
+                            if (item && !itemSet.has(item)) {
+                                allItems.push(item);
+                                itemSet.add(item);
+                            }
+                        }
+                    });
+                } catch (error) {
+                    console.error(`Failed to fetch from ${url}:`, error);
+                }
+            }
+
+            if (allItems.length > 0) {
+                config.items = allItems;
+                config.updatedAt = Date.now();
+                return await saveData(`刷新优选配置: ${config.name}`);
+            }
+            return false;
+        } catch (error) {
+            console.error('Failed to refresh optimal config:', error);
+            return false;
+        }
+    }
+
     // ==================== Actions: Config ====================
     function updateConfig(newConfig: Partial<AppConfig>) {
         config.value = { ...config.value, ...newConfig };
@@ -509,6 +559,7 @@ export const useDataStore = defineStore('data', () => {
         updateOptimalConfig,
         deleteOptimalConfig,
         deleteAllOptimalConfigs,
+        refreshOptimalConfigFromUrls,
 
         // Config Actions
         updateConfig
