@@ -23,11 +23,59 @@ defineEmits<{
 }>();
 const { showToast } = useToastStore();
 const dataStore = useDataStore();
-const { activeSubscriptions, manualNodes, profiles, totalNodeCount, activeNodeCount } =
+const { activeSubscriptions, manualNodes, profiles, totalNodeCount, activeNodeCount, optimalConfigs } =
     storeToRefs(dataStore);
 
 // Computed for Display
 const activeProfilesCount = computed(() => profiles.value.filter((p) => p.enabled).length);
+
+// 优选配置统计
+const enabledOptimalConfigsCount = computed(() =>
+    optimalConfigs.value.filter((c) => c.enabled).length
+);
+
+const totalOptimalItems = computed(() => {
+    const itemSet = new Set<string>();
+    optimalConfigs.value
+        .filter((c) => c.enabled)
+        .forEach((c) => c.items.forEach((item) => { if (item.trim()) itemSet.add(item.trim()); }));
+    return itemSet.size;
+});
+
+// 预计展开节点数：对每个启用的手动节点，按优选逻辑计算展开倍数
+const expandedOptimalNodeCount = computed(() => {
+    const enabledConfigs = optimalConfigs.value.filter(
+        (c) => c.enabled !== false && Array.isArray(c.items) && c.items.length > 0
+    );
+    if (enabledConfigs.length === 0) {
+        return manualNodes.value.filter((n) => n.enabled).length;
+    }
+
+    // 全局配置条目（去重）
+    const globalItems = new Set<string>();
+    enabledConfigs
+        .filter((c) => c.isGlobal === true)
+        .forEach((c) => c.items.forEach((item) => { if (item.trim()) globalItems.add(item.trim()); }));
+
+    let total = 0;
+    for (const node of manualNodes.value) {
+        if (!node.enabled) continue;
+        const specificIds = (node as any).optimalConfigIds as string[] | undefined;
+        if (specificIds && specificIds.length > 0) {
+            const specificItems = new Set<string>();
+            for (const configId of specificIds) {
+                const cfg = enabledConfigs.find((c) => c.id === configId);
+                if (cfg?.items) cfg.items.forEach((item) => { if (item.trim()) specificItems.add(item.trim()); });
+            }
+            total += specificItems.size || 1;
+        } else if (globalItems.size > 0) {
+            total += globalItems.size;
+        } else {
+            total += 1;
+        }
+    }
+    return total;
+});
 const isUpdatingAllSubs = ref(false);
 
 const handleUpdateAll = async () => {
@@ -501,6 +549,60 @@ onMounted(() => {
                     <p class="text-xs text-gray-500 dark:text-gray-400">组合订阅和节点</p>
                 </div>
             </button>
+
+            <!-- 优选配置统计卡 -->
+            <div
+                class="card-glass md:col-span-3 relative overflow-hidden rounded-3xl p-5 shadow-md"
+            >
+                <div
+                    class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                    <div class="flex items-center gap-3">
+                        <div
+                            class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-amber-500/20"
+                        >
+                            <span class="text-xl">🎯</span>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-bold text-gray-900 dark:text-white">
+                                优选配置
+                            </h3>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">
+                                Optimal Nodes Summary
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-6">
+                        <div class="text-center">
+                            <div class="text-2xl font-black text-amber-500">
+                                {{ enabledOptimalConfigsCount }}
+                            </div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">启用配置</div>
+                        </div>
+                        <div
+                            class="h-10 w-px self-center bg-gray-200 dark:bg-gray-700"
+                        ></div>
+                        <div class="text-center">
+                            <div class="text-2xl font-black text-orange-500">
+                                {{ totalOptimalItems }}
+                            </div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">优选条目</div>
+                        </div>
+                        <div
+                            class="h-10 w-px self-center bg-gray-200 dark:bg-gray-700"
+                        ></div>
+                        <div class="text-center">
+                            <div class="text-2xl font-black text-teal-500">
+                                {{ expandedOptimalNodeCount }}
+                            </div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">
+                                预计节点
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </template>
