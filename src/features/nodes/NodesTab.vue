@@ -15,8 +15,8 @@ import { useToastStore } from '../../stores/toast';
 import type { Node, OptimalConfig } from '../../types/index';
 import { createNode, parseImportText } from '../../utils/importer';
 import { fetchOptimalNodesPreview } from '../../utils/api';
+import { copyToClipboard } from '../../utils/utils';
 import ManualNodeCard from './components/ManualNodeCard.vue';
-import OptimalNodeCard from './components/OptimalNodeCard.vue';
 
 const props = defineProps<{
     tabAction?: { action: string } | null;
@@ -115,34 +115,6 @@ interface NodeGroup {
 const expandedGroups = ref<NodeGroup[]>([]);
 const expandedLoading = ref(false);
 
-// 展开的扁平列表：每个 variant 单独一条
-const flatExpandedNodes = computed(() => {
-    const result: Array<ExpandedVariant & { originalName: string; protocol: string; originalPort: string | number }> = [];
-    for (const group of expandedGroups.value) {
-        for (const v of group.variants) {
-            result.push({
-                ...v,
-                originalName: group.originalName,
-                protocol: group.protocol,
-                originalPort: group.originalPort
-            });
-        }
-    }
-    return result;
-});
-
-const filteredExpandedNodes = computed(() => {
-    if (!searchTerm.value) return flatExpandedNodes.value;
-    const term = searchTerm.value.toLowerCase();
-    return flatExpandedNodes.value.filter(
-        (n) =>
-            n.originalName.toLowerCase().includes(term) ||
-            n.expandedServer.toLowerCase().includes(term) ||
-            n.configName.toLowerCase().includes(term) ||
-            n.protocol.toLowerCase().includes(term)
-    );
-});
-
 const loadExpandedNodes = async () => {
     expandedLoading.value = true;
     try {
@@ -157,6 +129,65 @@ const loadExpandedNodes = async () => {
     } finally {
         expandedLoading.value = false;
     }
+};
+
+// ==================== 优选节点弹窗 ====================
+
+const showNodeOptimalModal = ref(false);
+const viewingNodeForOptimal = ref<Node | null>(null);
+const viewingOptimalVariants = ref<Array<{
+    expandedServer: string;
+    configName: string;
+    isGlobal: boolean;
+    originalPort: string | number;
+}>>([]);
+const optimalModalLoading = ref(false);
+
+/** 将原始节点 URL 中的 server 替换为优选 server */
+function buildOptimalUrl(originalUrl: string, newServer: string): string {
+    if (!originalUrl || !newServer) return '';
+    const atIdx = originalUrl.indexOf('@');
+    if (atIdx === -1) return originalUrl; // vmess base64 等无法简单替换
+    const afterAt = originalUrl.slice(atIdx + 1);
+    const portIdx = afterAt.indexOf(':');
+    if (portIdx === -1) return originalUrl;
+    return originalUrl.slice(0, atIdx + 1) + newServer + afterAt.slice(portIdx);
+}
+
+const handleViewNodeOptimal = async (node: Node) => {
+    viewingNodeForOptimal.value = node;
+    showNodeOptimalModal.value = true;
+
+    let group = expandedGroups.value.find((g) => g.originalId === node.id);
+    if (!group) {
+        optimalModalLoading.value = true;
+        await loadExpandedNodes();
+        optimalModalLoading.value = false;
+        group = expandedGroups.value.find((g) => g.originalId === node.id);
+    }
+
+    viewingOptimalVariants.value = group
+        ? group.variants.map((v) => ({ ...v, originalPort: group!.originalPort }))
+        : [];
+};
+
+const handleCopyOneOptimal = async (expandedServer: string) => {
+    if (!viewingNodeForOptimal.value) return;
+    const url = buildOptimalUrl(viewingNodeForOptimal.value.url, expandedServer);
+    const text = url || expandedServer;
+    const success = await copyToClipboard(text);
+    if (success) showToast('📋 已复制节点链接', 'success');
+    else showToast('❌ 复制失败', 'error');
+};
+
+const handleCopyAllOptimal = async () => {
+    if (!viewingNodeForOptimal.value) return;
+    const lines = viewingOptimalVariants.value
+        .map((v) => buildOptimalUrl(viewingNodeForOptimal.value!.url, v.expandedServer) || v.expandedServer)
+        .join('\n');
+    const success = await copyToClipboard(lines);
+    if (success) showToast(`📋 已复制 ${viewingOptimalVariants.value.length} 个节点链接`, 'success');
+    else showToast('❌ 复制失败', 'error');
 };
 
 // State
@@ -647,6 +678,7 @@ onUnmounted(() => {
                             @edit="handleEditNode(node.id)"
                             @delete="handleDeleteNode(node.id)"
                             @toggle-select="toggleSelection(node.id)"
+                            @view-optimal="handleViewNodeOptimal(node)"
                         />
                     </div>
                 </template>
@@ -665,6 +697,7 @@ onUnmounted(() => {
                         @edit="handleEditNode(node.id)"
                         @delete="handleDeleteNode(node.id)"
                         @toggle-select="toggleSelection(node.id)"
+                        @view-optimal="handleViewNodeOptimal(node)"
                     />
                 </div>
             </div>
@@ -701,53 +734,85 @@ onUnmounted(() => {
             </template>
         </EmptyState>
 
-        <!-- ==================== 优选节点区块 ==================== -->
-        <div v-if="flatExpandedNodes.length > 0 || expandedLoading" class="mt-8">
-            <!-- 区块标题 -->
-            <div class="mb-4 flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                    <h3 class="text-base font-bold text-gray-700 dark:text-gray-200">
-                        🎯 优选节点
-                    </h3>
-                    <span class="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
-                        {{ filteredExpandedNodes.length }}
-                    </span>
+        <!-- ==================== 优选节点弹窗 ==================== -->
+        <BaseModal
+            :show="showNodeOptimalModal"
+            size="2xl"
+            @update:show="showNodeOptimalModal = $event"
+        >
+            <template #title>
+                <h3 class="text-lg font-bold text-gray-900 dark:text-white">
+                    🎯 优选节点 · {{ viewingNodeForOptimal?.name }}
+                </h3>
+            </template>
+            <template #body>
+                <div class="space-y-4">
+                    <!-- 加载中 -->
+                    <div v-if="optimalModalLoading" class="flex items-center justify-center py-10">
+                        <div class="h-6 w-6 animate-spin rounded-full border-2 border-gray-200 border-t-amber-500"></div>
+                        <span class="ml-3 text-sm text-gray-500 dark:text-gray-400">正在拉取优选节点...</span>
+                    </div>
+
+                    <!-- 无数据 -->
+                    <div
+                        v-else-if="viewingOptimalVariants.length === 0"
+                        class="py-10 text-center text-sm text-gray-500 dark:text-gray-400"
+                    >
+                        该节点暂无优选变体，请检查优选配置是否已启用。
+                    </div>
+
+                    <!-- 列表 -->
+                    <div v-else class="space-y-3">
+                        <!-- 标题行 -->
+                        <div class="flex items-center justify-between">
+                            <p class="text-sm text-gray-600 dark:text-gray-400">
+                                共
+                                <span class="font-semibold text-amber-600 dark:text-amber-400">{{ viewingOptimalVariants.length }}</span>
+                                个优选节点
+                            </p>
+                            <button
+                                class="flex items-center gap-1.5 rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-700 transition hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-900/50"
+                                @click="handleCopyAllOptimal"
+                            >
+                                📋 复制全部
+                            </button>
+                        </div>
+
+                        <!-- 节点列表 -->
+                        <div class="max-h-[28rem] space-y-2 overflow-y-auto pr-1">
+                            <div
+                                v-for="(variant, idx) in viewingOptimalVariants"
+                                :key="idx"
+                                class="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-800"
+                            >
+                                <div class="min-w-0 flex-1">
+                                    <p
+                                        class="truncate font-mono text-sm font-semibold text-gray-800 dark:text-gray-100"
+                                        :title="variant.expandedServer"
+                                    >
+                                        {{ variant.expandedServer
+                                        }}<span v-if="variant.originalPort" class="text-gray-400">:{{ variant.originalPort }}</span>
+                                    </p>
+                                    <p class="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
+                                        <span
+                                            v-if="variant.isGlobal"
+                                            class="mr-1 inline-block rounded bg-green-100 px-1.5 py-0.5 text-xs font-semibold text-green-600 dark:bg-green-900/40 dark:text-green-400"
+                                        >全局</span>
+                                        {{ variant.configName }}
+                                    </p>
+                                </div>
+                                <button
+                                    class="shrink-0 rounded-lg bg-indigo-100 px-3 py-1.5 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:hover:bg-indigo-900/50"
+                                    @click="handleCopyOneOptimal(variant.expandedServer)"
+                                >
+                                    复制
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <button
-                    class="flex items-center gap-1.5 rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-                    :disabled="expandedLoading"
-                    @click="loadExpandedNodes"
-                >
-                    <span :class="{ 'animate-spin': expandedLoading }">🔄</span>
-                    刷新
-                </button>
-            </div>
-
-            <!-- 加载中 -->
-            <div v-if="expandedLoading" class="flex items-center justify-center py-10">
-                <div class="h-6 w-6 animate-spin rounded-full border-2 border-gray-200 border-t-amber-500"></div>
-                <span class="ml-3 text-sm text-gray-500 dark:text-gray-400">正在拉取优选节点...</span>
-            </div>
-
-            <!-- 优选节点卡片网格 -->
-            <div
-                v-else-if="filteredExpandedNodes.length > 0"
-                class="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3 lg:gap-8"
-            >
-                <OptimalNodeCard
-                    v-for="(node, idx) in filteredExpandedNodes"
-                    :key="`opt-${idx}`"
-                    :expanded-server="node.expandedServer"
-                    :original-port="node.originalPort"
-                    :original-name="node.originalName"
-                    :protocol="node.protocol"
-                    :config-name="node.configName"
-                    :is-global="node.isGlobal"
-                />
-            </div>
-
-            <!-- 搜索无结果时隐藏此区块 -->
-        </div>
+            </template>
+        </BaseModal>
 
         <!-- Modals -->
         <BulkImportModal v-model:show="showBulkImportModal" @import="handleBulkImport" />

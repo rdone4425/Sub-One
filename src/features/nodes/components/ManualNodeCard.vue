@@ -31,6 +31,7 @@ const emit = defineEmits<{
     (e: 'delete'): void;
     (e: 'edit'): void;
     (e: 'toggleSelect'): void;
+    (e: 'view-optimal'): void;
 }>();
 
 const toastStore = useToastStore();
@@ -53,6 +54,15 @@ const nodeOptimalConfigs = computed(() => {
     return props.node.optimalConfigIds
         .map(id => stats.find(config => config.id === id))
         .filter(Boolean) as Array<OptimalConfig & { usageCount: number }>;
+});
+
+/** 是否有任何优选配置会应用到此节点（显式关联 或 全局配置） */
+const hasAnyOptimalConfig = computed(() => {
+    const configs = props.optimalConfigs || [];
+    if (props.node?.optimalConfigIds?.length) {
+        return configs.some((c) => c.enabled !== false && props.node.optimalConfigIds!.includes(c.id));
+    }
+    return configs.some((c) => c.enabled !== false && c.isGlobal);
 });
 
 /** 复制节点链接到剪贴板 */
@@ -155,6 +165,17 @@ const handleCopy = async (url: string) => {
                     "
                     @click.stop
                 >
+                    <!-- 🎯 优选按钮 -->
+                    <button
+                        v-if="hasAnyOptimalConfig"
+                        class="rounded-lg p-1.5 text-amber-500 transition-colors hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-900/40 dark:hover:text-amber-400"
+                        title="查看优选节点"
+                        @click="emit('view-optimal')"
+                    >
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                        </svg>
+                    </button>
                     <button
                         class="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-900/40 dark:hover:text-indigo-400"
                         title="编辑"
