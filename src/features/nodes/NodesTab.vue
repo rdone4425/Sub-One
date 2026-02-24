@@ -14,7 +14,9 @@ import { useDataStore } from '../../stores/data';
 import { useToastStore } from '../../stores/toast';
 import type { Node, OptimalConfig } from '../../types/index';
 import { createNode, parseImportText } from '../../utils/importer';
+import { fetchOptimalNodesPreview } from '../../utils/api';
 import ManualNodeCard from './components/ManualNodeCard.vue';
+import OptimalNodeCard from './components/OptimalNodeCard.vue';
 
 const props = defineProps<{
     tabAction?: { action: string } | null;
@@ -93,6 +95,69 @@ const optimalConfigStats = computed(() => {
         ).length
     }));
 });
+
+// ==================== 优选节点加载 ====================
+
+interface ExpandedVariant {
+    expandedServer: string;
+    configName: string;
+    isGlobal: boolean;
+}
+interface NodeGroup {
+    originalId: string;
+    originalName: string;
+    protocol: string;
+    originalServer: string;
+    originalPort: string | number;
+    variants: ExpandedVariant[];
+}
+
+const expandedGroups = ref<NodeGroup[]>([]);
+const expandedLoading = ref(false);
+
+// 展开的扁平列表：每个 variant 单独一条
+const flatExpandedNodes = computed(() => {
+    const result: Array<ExpandedVariant & { originalName: string; protocol: string; originalPort: string | number }> = [];
+    for (const group of expandedGroups.value) {
+        for (const v of group.variants) {
+            result.push({
+                ...v,
+                originalName: group.originalName,
+                protocol: group.protocol,
+                originalPort: group.originalPort
+            });
+        }
+    }
+    return result;
+});
+
+const filteredExpandedNodes = computed(() => {
+    if (!searchTerm.value) return flatExpandedNodes.value;
+    const term = searchTerm.value.toLowerCase();
+    return flatExpandedNodes.value.filter(
+        (n) =>
+            n.originalName.toLowerCase().includes(term) ||
+            n.expandedServer.toLowerCase().includes(term) ||
+            n.configName.toLowerCase().includes(term) ||
+            n.protocol.toLowerCase().includes(term)
+    );
+});
+
+const loadExpandedNodes = async () => {
+    expandedLoading.value = true;
+    try {
+        const result = await fetchOptimalNodesPreview();
+        if (result.success && result.groups) {
+            expandedGroups.value = result.groups;
+        } else {
+            expandedGroups.value = [];
+        }
+    } catch {
+        expandedGroups.value = [];
+    } finally {
+        expandedLoading.value = false;
+    }
+};
 
 // State
 const showNodesMoreMenu = ref(false);
@@ -280,6 +345,7 @@ const handleDragEnd = () => {
 
 onMounted(() => {
     document.addEventListener('click', handleClickOutside);
+    loadExpandedNodes();
 });
 onUnmounted(() => {
     document.removeEventListener('click', handleClickOutside);
@@ -634,6 +700,54 @@ onUnmounted(() => {
                 </svg>
             </template>
         </EmptyState>
+
+        <!-- ==================== 优选节点区块 ==================== -->
+        <div v-if="flatExpandedNodes.length > 0 || expandedLoading" class="mt-8">
+            <!-- 区块标题 -->
+            <div class="mb-4 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <h3 class="text-base font-bold text-gray-700 dark:text-gray-200">
+                        🎯 优选节点
+                    </h3>
+                    <span class="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                        {{ filteredExpandedNodes.length }}
+                    </span>
+                </div>
+                <button
+                    class="flex items-center gap-1.5 rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                    :disabled="expandedLoading"
+                    @click="loadExpandedNodes"
+                >
+                    <span :class="{ 'animate-spin': expandedLoading }">🔄</span>
+                    刷新
+                </button>
+            </div>
+
+            <!-- 加载中 -->
+            <div v-if="expandedLoading" class="flex items-center justify-center py-10">
+                <div class="h-6 w-6 animate-spin rounded-full border-2 border-gray-200 border-t-amber-500"></div>
+                <span class="ml-3 text-sm text-gray-500 dark:text-gray-400">正在拉取优选节点...</span>
+            </div>
+
+            <!-- 优选节点卡片网格 -->
+            <div
+                v-else-if="filteredExpandedNodes.length > 0"
+                class="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3 lg:gap-8"
+            >
+                <OptimalNodeCard
+                    v-for="(node, idx) in filteredExpandedNodes"
+                    :key="`opt-${idx}`"
+                    :expanded-server="node.expandedServer"
+                    :original-port="node.originalPort"
+                    :original-name="node.originalName"
+                    :protocol="node.protocol"
+                    :config-name="node.configName"
+                    :is-global="node.isGlobal"
+                />
+            </div>
+
+            <!-- 搜索无结果时隐藏此区块 -->
+        </div>
 
         <!-- Modals -->
         <BulkImportModal v-model:show="showBulkImportModal" @import="handleBulkImport" />
