@@ -142,14 +142,6 @@ const navigationItems = computed<NavigationItem[]>(() => [
         gradient: 'from-cyan-500 to-blue-600',
         shadow: 'shadow-cyan-500/30',
         description: '优选域名/IP'
-    },
-    {
-        id: 'optimal-nodes',
-        label: '优选节点',
-        icon: 'optimal-nodes',
-        gradient: 'from-amber-500 to-orange-600',
-        shadow: 'shadow-amber-500/30',
-        description: '查看展开的节点'
     }
 ]);
 
@@ -508,22 +500,6 @@ onUnmounted(() => {
                                 />
                             </svg>
 
-                            <!-- Optimal Nodes 图标（星光展开） -->
-                            <svg
-                                v-else-if="item.icon === 'optimal-nodes'"
-                                xmlns="http://www.w3.org/2000/svg"
-                                class="h-5 w-5"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                            >
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    stroke-width="2"
-                                    d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
-                                />
-                            </svg>
                         </div>
 
                         <!-- 标签和数量徽章（折叠时隐藏） -->

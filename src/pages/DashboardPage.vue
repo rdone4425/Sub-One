@@ -34,7 +34,6 @@ import DashboardHome from '../features/dashboard/DashboardHome.vue';
 import NodesTab from '../features/nodes/NodesTab.vue';
 import NodeDetailsModal from '../features/nodes/components/NodeDetailsModal.vue';
 import OptimizeTab from '../features/optimize/OptimizeTab.vue';
-import OptimalNodesTab from '../features/optimize/OptimalNodesTab.vue';
 import ProfilesTab from '../features/profiles/ProfilesTab.vue';
 import SubscriptionsTab from '../features/subscriptions/SubscriptionsTab.vue';
 import { useDataStore } from '../stores/data';
@@ -236,9 +235,6 @@ const handleShowProfileNodeDetails = (profile: Profile) => {
                     :tab-action="tabAction"
                     @action-handled="tabAction = null"
                 />
-
-                <!-- 优选节点预览页 -->
-                <OptimalNodesTab v-if="activeTab === 'optimal-nodes'" />
             </div>
         </Transition>
     </div>
