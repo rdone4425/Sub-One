@@ -17,10 +17,11 @@
 -->
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 
 import Modal from '../../../components/ui/BaseModal.vue';
 import type { Node, Profile, Subscription } from '../../../types/index';
+import { fetchOptimalNodesPreview } from '../../../utils/api';
 import { filterNodes } from '../../../utils/search';
 import { generateShortId } from '../../../utils/utils';
 
@@ -163,6 +164,62 @@ const handleDeselectAll = (
         (id) => !sourceIds.includes(id)
     );
 };
+
+// ==================== 优选节点预览 ====================
+
+interface ExpandedVariant {
+    expandedServer: string;
+    configName: string;
+    isGlobal: boolean;
+    originalPort: string | number;
+    originalName: string;
+}
+
+const allOptimalGroups = ref<Array<{
+    originalId: string;
+    originalName: string;
+    originalPort: string | number;
+    variants: Array<{ expandedServer: string; configName: string; isGlobal: boolean }>;
+}>>([]);
+const optimalLoading = ref(false);
+const showOptimalPreview = ref(false);
+
+// 当前选中的手动节点所对应的展开列表
+const previewExpandedNodes = computed((): ExpandedVariant[] => {
+    const selected = new Set(localProfile.value.manualNodes || []);
+    const result: ExpandedVariant[] = [];
+    for (const group of allOptimalGroups.value) {
+        if (!selected.has(group.originalId)) continue;
+        for (const v of group.variants) {
+            result.push({
+                ...v,
+                originalPort: group.originalPort,
+                originalName: group.originalName
+            });
+        }
+    }
+    return result;
+});
+
+const loadOptimalPreview = async () => {
+    if (allOptimalGroups.value.length > 0) return; // 已加载，不重复请求
+    optimalLoading.value = true;
+    try {
+        const result = await fetchOptimalNodesPreview();
+        if (result.success && result.groups) {
+            allOptimalGroups.value = result.groups;
+        }
+    } finally {
+        optimalLoading.value = false;
+    }
+};
+
+// 一键选中所有手动节点
+const selectAllManualNodes = () => {
+    localProfile.value.manualNodes = props.allManualNodes.map((n) => n.id);
+};
+
+onMounted(loadOptimalPreview);
 </script>
 
 <template>
@@ -470,6 +527,91 @@ const handleDeselectAll = (
                                 没有找到节点
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- 🎯 优选节点展开预览 -->
+                <div class="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20">
+                    <!-- 标题行（可展开/收起） -->
+                    <button
+                        type="button"
+                        class="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                        @click="showOptimalPreview = !showOptimalPreview"
+                    >
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-bold text-amber-700 dark:text-amber-300">
+                                🎯 优选节点预览
+                            </span>
+                            <span
+                                v-if="!optimalLoading"
+                                class="rounded-full bg-amber-200 px-2 py-0.5 text-xs font-bold text-amber-800 dark:bg-amber-800 dark:text-amber-200"
+                            >
+                                {{ previewExpandedNodes.length }} 个
+                            </span>
+                            <span v-else class="text-xs text-amber-600 dark:text-amber-400">加载中...</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <!-- 一键选择所有手动节点 -->
+                            <span
+                                class="rounded-lg bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700 transition hover:bg-amber-200 dark:bg-amber-800 dark:text-amber-200 dark:hover:bg-amber-700"
+                                title="选中所有手动节点，确保所有优选节点都包含在订阅组中"
+                                @click.stop="selectAllManualNodes"
+                            >
+                                包含所有手动节点
+                            </span>
+                            <svg
+                                class="h-4 w-4 text-amber-600 transition-transform duration-200 dark:text-amber-400"
+                                :class="{ 'rotate-180': showOptimalPreview }"
+                                fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                            >
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </div>
+                    </button>
+
+                    <!-- 展开的节点列表 -->
+                    <div v-if="showOptimalPreview" class="border-t border-amber-200 px-4 pb-4 pt-3 dark:border-amber-800">
+                        <!-- 加载中 -->
+                        <div v-if="optimalLoading" class="flex items-center gap-2 py-4">
+                            <div class="h-4 w-4 animate-spin rounded-full border-2 border-amber-300 border-t-amber-600"></div>
+                            <span class="text-xs text-amber-600 dark:text-amber-400">正在拉取优选节点...</span>
+                        </div>
+
+                        <!-- 空状态 -->
+                        <div v-else-if="previewExpandedNodes.length === 0" class="py-4 text-center text-xs text-amber-600 dark:text-amber-400">
+                            <span v-if="(localProfile.manualNodes || []).length === 0">
+                                请先勾选手动节点，或点击「包含所有手动节点」查看展开结果
+                            </span>
+                            <span v-else>
+                                当前选中的手动节点暂无优选展开（请检查优选配置是否启用）
+                            </span>
+                        </div>
+
+                        <!-- 节点列表 -->
+                        <div v-else class="max-h-48 space-y-1.5 overflow-y-auto pr-1">
+                            <div
+                                v-for="(node, idx) in previewExpandedNodes"
+                                :key="idx"
+                                class="flex items-center justify-between gap-2 rounded-lg bg-white px-3 py-2 dark:bg-gray-800"
+                            >
+                                <div class="min-w-0 flex-1">
+                                    <p class="truncate font-mono text-xs font-medium text-gray-700 dark:text-gray-200">
+                                        {{ node.expandedServer
+                                        }}<span v-if="node.originalPort" class="text-gray-400">:{{ node.originalPort }}</span>
+                                    </p>
+                                    <p class="truncate text-xs text-gray-400 dark:text-gray-500">
+                                        {{ node.originalName }}
+                                        <span v-if="node.isGlobal" class="ml-1 rounded bg-green-100 px-1 text-green-600 dark:bg-green-900/40 dark:text-green-400">全局</span>
+                                        · {{ node.configName }}
+                                    </p>
+                                </div>
+                                <span class="shrink-0 text-xs text-gray-300 dark:text-gray-600">#{{ idx + 1 }}</span>
+                            </div>
+                        </div>
+
+                        <p class="mt-3 text-xs text-amber-600 dark:text-amber-400">
+                            💡 以上节点将在订阅被访问时由后端自动展开加入，无需额外配置
+                        </p>
                     </div>
                 </div>
             </div>
