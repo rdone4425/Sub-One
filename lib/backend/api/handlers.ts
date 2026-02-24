@@ -456,6 +456,151 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
             }
         }
 
+        case '/optimal_nodes/preview': {
+            if (request.method !== 'GET')
+                return new Response('Method Not Allowed', { status: 405 });
+
+            try {
+                const storage = await getStorage(env);
+                const [allSubs, optimalConfigsRaw] = await Promise.all([
+                    storage.get<any[]>(KV_KEY_SUBS),
+                    storage.get<any[]>(KV_KEY_OPTIMAL_CONFIGS)
+                ]);
+
+                const HTTP_REGEX = /^https?:\/\//;
+                const manualNodes = (allSubs || []).filter(
+                    (item: any) => item.enabled && (!item.url || !HTTP_REGEX.test(item.url))
+                );
+                const rawConfigs = (optimalConfigsRaw || []).filter(
+                    (c: any) => c.enabled !== false
+                );
+
+                if (rawConfigs.length === 0 || manualNodes.length === 0) {
+                    return new Response(
+                        JSON.stringify({ success: true, groups: [], totalExpanded: 0 }),
+                        { headers: { 'Content-Type': 'application/json' } }
+                    );
+                }
+
+                // 并行解析每个配置的 items（有 sourceUrls 则实时拉取）
+                const resolvedConfigs = await Promise.all(
+                    rawConfigs.map(async (cfg: any) => {
+                        const sourceUrls: string[] = cfg.sourceUrls || [];
+                        if (sourceUrls.length === 0) {
+                            return {
+                                ...cfg,
+                                items: (cfg.items || []).map((s: string) => s.trim()).filter(Boolean)
+                            };
+                        }
+
+                        const fetched = await Promise.all(
+                            sourceUrls.map(async (url: string) => {
+                                try {
+                                    const res = (await Promise.race([
+                                        fetch(new Request(url, {
+                                            headers: { 'User-Agent': GLOBAL_USER_AGENT },
+                                            redirect: 'follow'
+                                        })),
+                                        new Promise((_, rej) =>
+                                            setTimeout(() => rej(new Error('Timeout')), 10000)
+                                        )
+                                    ])) as Response;
+                                    if (!res.ok) return [];
+                                    const text = await res.text();
+                                    return text
+                                        .split('\n')
+                                        .map((line: string) => line.split('#')[0].trim())
+                                        .filter(Boolean);
+                                } catch {
+                                    return [];
+                                }
+                            })
+                        );
+
+                        const seen = new Set<string>();
+                        const items: string[] = [];
+                        for (const list of fetched) {
+                            for (const item of list as string[]) {
+                                if (!seen.has(item)) { seen.add(item); items.push(item); }
+                            }
+                        }
+                        // 远程失败则回退 KV 存储的 items
+                        return {
+                            ...cfg,
+                            items: items.length > 0
+                                ? items
+                                : (cfg.items || []).map((s: string) => s.trim()).filter(Boolean)
+                        };
+                    })
+                );
+
+                // 收集全局配置条目
+                const activeConfigs = resolvedConfigs.filter(
+                    (c: any) => Array.isArray(c.items) && c.items.length > 0
+                );
+                const globalVariants: Array<{ expandedServer: string; configName: string }> = [];
+                const globalSeen = new Set<string>();
+                for (const cfg of activeConfigs.filter((c: any) => c.isGlobal === true)) {
+                    for (const item of cfg.items as string[]) {
+                        if (!globalSeen.has(item)) {
+                            globalSeen.add(item);
+                            globalVariants.push({ expandedServer: item, configName: cfg.name });
+                        }
+                    }
+                }
+
+                // 按原始节点分组展开
+                const groups: any[] = [];
+                for (const node of manualNodes) {
+                    const specificIds = (node as any).optimalConfigIds as string[] | undefined;
+                    let variants: Array<{ expandedServer: string; configName: string; isGlobal: boolean }> = [];
+
+                    if (specificIds && specificIds.length > 0) {
+                        const seen = new Set<string>();
+                        for (const configId of specificIds) {
+                            const cfg = activeConfigs.find((c: any) => c.id === configId);
+                            if (!cfg) continue;
+                            for (const item of cfg.items as string[]) {
+                                if (!seen.has(item)) {
+                                    seen.add(item);
+                                    variants.push({ expandedServer: item, configName: cfg.name, isGlobal: false });
+                                }
+                            }
+                        }
+                    } else if (globalVariants.length > 0) {
+                        variants = globalVariants.map((g) => ({ ...g, isGlobal: true }));
+                    }
+
+                    if (variants.length === 0) continue;
+
+                    groups.push({
+                        originalId: (node as any).id,
+                        originalName: (node as any).name || '未命名',
+                        protocol: String((node as any).type || (node as any).protocol || 'unknown'),
+                        originalServer: String((node as any).server || ''),
+                        originalPort: (node as any).port ?? '',
+                        variants
+                    });
+                }
+
+                return new Response(
+                    JSON.stringify({
+                        success: true,
+                        groups,
+                        totalExpanded: groups.reduce((s: number, g: any) => s + g.variants.length, 0)
+                    }),
+                    { headers: { 'Content-Type': 'application/json' } }
+                );
+            } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e);
+                console.error('[API Error /optimal_nodes/preview]', msg);
+                return new Response(
+                    JSON.stringify({ success: false, error: msg }),
+                    { status: 500 }
+                );
+            }
+        }
+
         case '/node_count': {
             if (request.method !== 'POST')
                 return new Response('Method Not Allowed', { status: 405 });

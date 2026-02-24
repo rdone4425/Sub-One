@@ -702,3 +702,28 @@ export async function getNodesUsingOptimalConfig(
         return { success: false, nodeCount: 0, nodes: [], error: String(error) };
     }
 }
+
+export async function fetchOptimalNodesPreview(): Promise<{
+    success: boolean;
+    groups?: Array<{
+        originalId: string;
+        originalName: string;
+        protocol: string;
+        originalServer: string;
+        originalPort: string | number;
+        variants: Array<{ expandedServer: string; configName: string; isGlobal: boolean }>;
+    }>;
+    totalExpanded?: number;
+    error?: string;
+}> {
+    try {
+        const response = await fetch('/api/optimal_nodes/preview');
+        if (!response.ok) {
+            return { success: false, error: `HTTP ${response.status}` };
+        }
+        return await response.json();
+    } catch (error) {
+        console.error('获取优选节点预览失败:', error);
+        return { success: false, error: String(error) };
+    }
+}

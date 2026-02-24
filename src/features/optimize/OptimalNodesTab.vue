@@ -2,36 +2,24 @@
   ==================== 优选节点预览页 ====================
 
   功能说明：
-  - 将所有启用的手动节点按优选配置展开，显示完整的优选节点列表
+  - 调用后端 /api/optimal_nodes/preview 接口
+  - 后端实时拉取 sourceUrls 并应用展开逻辑
+  - 将所有手动节点按优选配置展开，显示完整的优选节点列表
   - 按原始节点分组展示每个节点对应的所有优选服务器地址
   - 支持搜索过滤
   - 节点总数统计
-
-  展开逻辑（与后端 expandNodesWithOptimalConfigs 完全一致）：
-  1. 手动节点有显式 optimalConfigIds → 使用关联配置展开
-  2. 手动节点无显式关联且存在全局配置 → 使用全部 isGlobal=true 配置展开
-  3. 无任何匹配 → 不展开，不显示
 
   ======================================================
 -->
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import { storeToRefs } from 'pinia';
-import { useDataStore } from '../../stores/data';
+import { computed, onMounted, ref } from 'vue';
+import { fetchOptimalNodesPreview } from '../../utils/api';
 
-const dataStore = useDataStore();
-const { manualNodes, optimalConfigs } = storeToRefs(dataStore);
-
-// ==================== 搜索 ====================
-
-const searchQuery = ref('');
-
-// ==================== 展开逻辑 ====================
+// ==================== 类型 ====================
 
 interface ExpandedVariant {
     expandedServer: string;
-    configId: string;
     configName: string;
     isGlobal: boolean;
 }
@@ -45,128 +33,87 @@ interface NodeGroup {
     variants: ExpandedVariant[];
 }
 
-const allGroups = computed((): NodeGroup[] => {
-    const enabledConfigs = optimalConfigs.value.filter(
-        (c) => c.enabled !== false && Array.isArray(c.items) && c.items.length > 0
-    );
-    if (enabledConfigs.length === 0) return [];
+// ==================== 状态 ====================
 
-    // 收集全局配置条目（去重，保留来源配置信息）
-    const globalVariants: ExpandedVariant[] = [];
-    const globalSeen = new Set<string>();
-    for (const config of enabledConfigs.filter((c) => c.isGlobal === true)) {
-        for (const item of config.items) {
-            const trimmed = item.trim();
-            if (trimmed && !globalSeen.has(trimmed)) {
-                globalSeen.add(trimmed);
-                globalVariants.push({
-                    expandedServer: trimmed,
-                    configId: config.id,
-                    configName: config.name,
-                    isGlobal: true
-                });
-            }
+const searchQuery = ref('');
+const isLoading = ref(false);
+const loadError = ref<string | null>(null);
+const allGroups = ref<NodeGroup[]>([]);
+const totalExpanded = ref(0);
+
+// ==================== 加载数据 ====================
+
+const loadPreview = async () => {
+    isLoading.value = true;
+    loadError.value = null;
+
+    try {
+        const result = await fetchOptimalNodesPreview();
+        if (result.success && result.groups) {
+            allGroups.value = result.groups;
+            totalExpanded.value = result.totalExpanded ?? 0;
+        } else {
+            loadError.value = result.error || '获取数据失败';
+            allGroups.value = [];
+            totalExpanded.value = 0;
         }
+    } catch (e) {
+        loadError.value = String(e);
+        allGroups.value = [];
+        totalExpanded.value = 0;
+    } finally {
+        isLoading.value = false;
     }
+};
 
-    const groups: NodeGroup[] = [];
+onMounted(loadPreview);
 
-    for (const node of manualNodes.value) {
-        if (!node.enabled) continue;
+// ==================== 搜索过滤 ====================
 
-        const specificIds = (node as any).optimalConfigIds as string[] | undefined;
-        let variants: ExpandedVariant[] = [];
-
-        if (specificIds && specificIds.length > 0) {
-            // 使用节点显式关联的配置
-            const seen = new Set<string>();
-            for (const configId of specificIds) {
-                const config = enabledConfigs.find((c) => c.id === configId);
-                if (!config) continue;
-                for (const item of config.items) {
-                    const trimmed = item.trim();
-                    if (trimmed && !seen.has(trimmed)) {
-                        seen.add(trimmed);
-                        variants.push({
-                            expandedServer: trimmed,
-                            configId: config.id,
-                            configName: config.name,
-                            isGlobal: false
-                        });
-                    }
-                }
-            }
-        } else if (globalVariants.length > 0) {
-            // 使用全局配置
-            variants = [...globalVariants];
-        }
-
-        if (variants.length === 0) continue;
-
-        groups.push({
-            originalId: node.id,
-            originalName: node.name,
-            protocol: String((node as any).type || (node as any).protocol || 'unknown'),
-            originalServer: String((node as any).server || ''),
-            originalPort: (node as any).port ?? '',
-            variants
-        });
-    }
-
-    return groups;
-});
-
-const filteredGroups = computed(() => {
+const filteredGroups = computed((): NodeGroup[] => {
     const q = searchQuery.value.trim().toLowerCase();
     if (!q) return allGroups.value;
     return allGroups.value
         .map((group) => {
-            const variantsMatch = group.variants.filter(
-                (v) =>
-                    v.expandedServer.toLowerCase().includes(q) ||
-                    v.configName.toLowerCase().includes(q)
-            );
             const nameMatch =
                 group.originalName.toLowerCase().includes(q) ||
                 group.protocol.toLowerCase().includes(q) ||
                 group.originalServer.toLowerCase().includes(q);
             if (nameMatch) return group;
+            const variantsMatch = group.variants.filter(
+                (v) =>
+                    v.expandedServer.toLowerCase().includes(q) ||
+                    v.configName.toLowerCase().includes(q)
+            );
             if (variantsMatch.length > 0) return { ...group, variants: variantsMatch };
             return null;
         })
         .filter((g): g is NodeGroup => g !== null);
 });
 
-const totalExpandedCount = computed(() =>
+const filteredExpandedCount = computed(() =>
     filteredGroups.value.reduce((sum, g) => sum + g.variants.length, 0)
 );
 
-const hasOptimalConfigs = computed(() =>
-    optimalConfigs.value.some(
-        (c) => c.enabled && Array.isArray(c.items) && c.items.length > 0
-    )
-);
+// ==================== 协议颜色 ====================
 
-const enabledManualNodesCount = computed(() =>
-    manualNodes.value.filter((n) => n.enabled).length
-);
-
-// 协议颜色映射
 const protocolColorMap: Record<string, string> = {
-    trojan:       'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300',
-    vless:        'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
-    vmess:        'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300',
-    ss:           'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
-    shadowsocks:  'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
-    hysteria2:    'bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-300',
-    hysteria:     'bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-300',
-    tuic:         'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300',
-    wireguard:    'bg-teal-100 text-teal-700 dark:bg-teal-900/50 dark:text-teal-300',
+    trojan:      'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300',
+    vless:       'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
+    vmess:       'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300',
+    ss:          'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
+    shadowsocks: 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
+    hysteria2:   'bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-300',
+    hysteria:    'bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-300',
+    tuic:        'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300',
+    wireguard:   'bg-teal-100 text-teal-700 dark:bg-teal-900/50 dark:text-teal-300',
 };
 
 function getProtocolColor(protocol: string): string {
-    return protocolColorMap[protocol.toLowerCase()] ??
-        'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+    return (
+        protocolColorMap[protocol.toLowerCase()] ??
+        'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+    );
 }
 </script>
 
@@ -177,57 +124,71 @@ function getProtocolColor(protocol: string): string {
             <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
                 🚀 优选节点预览
             </h2>
-            <div class="flex gap-4 text-sm text-gray-600 dark:text-gray-400">
-                <span>
-                    <span class="font-semibold text-gray-900 dark:text-white">
-                        {{ filteredGroups.length }}
+            <div class="flex items-center gap-3">
+                <div v-if="!isLoading" class="flex gap-4 text-sm text-gray-600 dark:text-gray-400">
+                    <span>
+                        <span class="font-semibold text-gray-900 dark:text-white">
+                            {{ filteredGroups.length }}
+                        </span>
+                        个原始节点
                     </span>
-                    个原始节点
-                </span>
-                <span>→</span>
-                <span>
-                    <span class="font-semibold text-teal-600 dark:text-teal-400">
-                        {{ totalExpandedCount }}
+                    <span>→</span>
+                    <span>
+                        <span class="font-semibold text-teal-600 dark:text-teal-400">
+                            {{ filteredExpandedCount }}
+                        </span>
+                        个优选节点
                     </span>
-                    个优选节点
-                </span>
+                </div>
+                <button
+                    class="flex items-center gap-1.5 rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                    :disabled="isLoading"
+                    @click="loadPreview"
+                >
+                    <span :class="{ 'animate-spin': isLoading }">🔄</span>
+                    刷新
+                </button>
             </div>
         </div>
 
-        <!-- 无优选配置提示 -->
+        <!-- 加载中 -->
+        <div v-if="isLoading" class="flex items-center justify-center py-20">
+            <div class="h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-indigo-500"></div>
+            <span class="ml-3 text-sm text-gray-500 dark:text-gray-400">正在拉取并计算优选节点...</span>
+        </div>
+
+        <!-- 加载失败 -->
         <div
-            v-if="!hasOptimalConfigs"
+            v-else-if="loadError"
+            class="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-red-200 py-16 dark:border-red-800"
+        >
+            <span class="mb-3 text-4xl">❌</span>
+            <p class="text-base font-semibold text-red-600 dark:text-red-400">加载失败</p>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ loadError }}</p>
+            <button
+                class="mt-4 rounded-lg bg-indigo-100 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-200 dark:bg-indigo-900/40 dark:text-indigo-300"
+                @click="loadPreview"
+            >
+                重试
+            </button>
+        </div>
+
+        <!-- 无数据 -->
+        <div
+            v-else-if="allGroups.length === 0"
             class="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 py-16 dark:border-gray-700"
         >
             <span class="mb-3 text-4xl">🎯</span>
-            <p class="text-base font-semibold text-gray-700 dark:text-gray-300">
-                尚未配置优选项
-            </p>
+            <p class="text-base font-semibold text-gray-700 dark:text-gray-300">暂无优选节点</p>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                请前往「优选管理」页面添加并启用优选配置
-            </p>
-        </div>
-
-        <!-- 无手动节点提示 -->
-        <div
-            v-else-if="enabledManualNodesCount === 0"
-            class="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 py-16 dark:border-gray-700"
-        >
-            <span class="mb-3 text-4xl">⚡</span>
-            <p class="text-base font-semibold text-gray-700 dark:text-gray-300">
-                没有启用的手动节点
-            </p>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                请前往「手动节点」页面添加节点后再查看
+                请前往「优选管理」添加优选配置，或前往「手动节点」添加启用的节点
             </p>
         </div>
 
         <template v-else>
             <!-- 搜索框 -->
             <div class="relative">
-                <span
-                    class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                >🔍</span>
+                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
                 <input
                     v-model="searchQuery"
                     type="text"
